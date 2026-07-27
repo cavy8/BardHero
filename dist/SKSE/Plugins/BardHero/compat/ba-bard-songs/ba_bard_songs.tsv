@@ -1,0 +1,88 @@
+id	instrument	artist	title	source
+drum_01_01	drum	Eren Ergen	Ottoman Music - Curcuna	drum/MUS_BardDrum_01_01.xwm
+drum_01_02	drum	Adrian J Portia	Remo Fiberskyn Framedrum Solo	drum/MUS_BardDrum_01_02.xwm
+drum_01_03	drum	David Kuckhermann	Cooperman Frame Drums - Bendir Renaissance Head	drum/MUS_BardDrum_01_03.xwm
+drum_01_04	drum	David Kuckhermann	Cooperman Frame Drums - Tar Renaissance Head	drum/MUS_BardDrum_01_04.xwm
+drum_01_05	drum	Murat Coskun	Frame Drum Natural 16 - Rahmentrommel mit Kreuz 16 - Schlagwerk RTS41	drum/MUS_BardDrum_01_05.xwm
+drum_01_06	drum	Murat Coskun	Frame Drum Natural 20 - Rahmentrommel 20 - Schlagwerk RTS53 - Part 2	drum/MUS_BardDrum_01_06.xwm
+drum_01_07	drum	Murat Coskun	Frame Drum Natural 24 - Rahmentrommel 60cm ohne Kreuz - Schlagwerk RTS62	drum/MUS_BardDrum_01_07.xwm
+drum_02_01	drum	Eren Ergen	Ottoman Music - Aksak Semai	drum/MUS_BardDrum_02_01.xwm
+drum_02_02	drum	Andrey Tanzu	Frame Drum Solo - Natural High Healing festival 2016 Avi Adir	drum/MUS_BardDrum_02_02.xwm
+drum_02_03	drum	David Kuckhermann	Cooperman Frame Drums - Bodhran Fiberskin Head	drum/MUS_BardDrum_02_03.xwm
+drum_02_04	drum	Tripp Dudley	Didge Project	drum/MUS_BardDrum_02_04.xwm
+drum_02_05	drum	Murat Coskun	Frame Drum Natural 18 - Rahmentrommel 18 - Schlagwerk RTS45	drum/MUS_BardDrum_02_05.xwm
+drum_02_06	drum	Murat Coskun	Frame Drum Natural 20 - Rahmentrommel 20 - Schlagwerk RTS53 - Part 3	drum/MUS_BardDrum_02_06.xwm
+drum_02_07	drum	Murat Coskun	Frame Drum Traditional - Def 16 - Schlagwerk RTDEF	drum/MUS_BardDrum_02_07.xwm
+drum_03_01	drum	Eren Ergen	Ottoman Music - Yuruk Semai	drum/MUS_BardDrum_03_01.xwm
+drum_03_02	drum	Marla Leigh	Cooperman 2018 12 Inch Frame Drum	drum/MUS_BardDrum_03_02.xwm
+drum_03_03	drum	David Kuckhermann	Cooperman Frame Drums - Bodhran Renaissance Head	drum/MUS_BardDrum_03_03.xwm
+drum_03_04	drum	Yshai Afterman	Frame Drum Solo	drum/MUS_BardDrum_03_04.xwm
+drum_03_05	drum	Murat Coskun	Frame Drum Natural 20 - Rahmentrommel 20 - Schlagwerk RTS53 - Part 1	drum/MUS_BardDrum_03_05.xwm
+drum_03_06	drum	Murat Coskun	Frame Drum Natural 20 with cross - Rahmentrommel mit Kreuz 20 - Schlagwerk RTS51	drum/MUS_BardDrum_03_06.xwm
+drum_03_07	drum	Murat Coskun	Schlagwerk Frame Drum natural RTS52	drum/MUS_BardDrum_03_07.xwm
+flute_01_01	flute	Phyllis Chan	Seven Medieval Tunes (L'autrier m'en aloie)	flute/mus_bardflute_01_01.xwm
+flute_01_02	flute	Andrei Krylov	Medieval Dance for Wooden Flute	flute/mus_bardflute_01_02.xwm
+flute_01_03	flute	Robert Harvey	The Old Flail jig on Irish Wooden Flute	flute/mus_bardflute_01_03.xwm
+flute_01_04	flute	CutiePie	Flaming Red Hair (LOTR)	flute/mus_bardflute_01_04.xwm
+flute_01_05	flute	Thomas Johnston	The New Broom	flute/mus_bardflute_01_05.xwm
+flute_02_01	flute	Phyllis Chan	Seven Medieval Tunes (La Rotta della Manfredina)	flute/mus_bardflute_02_01.xwm
+flute_02_02	flute	Erin F	The Irish Washerwoman	flute/mus_bardflute_02_02.xwm
+flute_02_03	flute	Aldo Bova	J. van Eyck, Doen Daphne	flute/mus_bardflute_02_03.xwm
+flute_02_04	flute	CutiePie	Federkleid	flute/mus_bardflute_02_04.xwm
+flute_02_05	flute	CutiePie	Tanz Mit Mir	flute/mus_bardflute_02_05.xwm
+flute_03_01	flute	Phyllis Chan	Seven Medieval Tunes (La Rotta)	flute/mus_bardflute_03_01.xwm
+flute_03_02	flute	Ekanath Bhakti	Estampie V on Medieval Flute	flute/mus_bardflute_03_02.xwm
+flute_03_03	flute	CutiePie	Western Realms	flute/mus_bardflute_03_03.xwm
+flute_03_04	flute	Hanneke van Proosdij	Wat zal men op den Avondt doen (5)	flute/mus_bardflute_03_04.xwm
+flute_03_05	flute	CutiePie	Dunmore Lassies	flute/mus_bardflute_03_05.xwm
+flute_04_01	flute	Phyllis Chan	Seven Medieval Tunes (Trotto)	flute/mus_bardflute_04_01.xwm
+flute_04_02	flute	CutiePie	Ashokan Farewell (High D)	flute/mus_bardflute_04_02.xwm
+flute_04_03	flute	CutiePie	Kaer Morhen (Witcher III)	flute/mus_bardflute_04_03.xwm
+flute_04_04	flute	CutiePie	Scarborough Fair	flute/mus_bardflute_04_04.xwm
+flute_04_05	flute	Mikie Smyth	The Wandering Minstrel	flute/mus_bardflute_04_05.xwm
+flute_05_01	flute	Phyllis Chan	Seven Medieval Tunes (Saltarello1)	flute/mus_bardflute_05_01.xwm
+flute_05_02	flute	CutiePie	Dance Of The Druids (Outlander)	flute/mus_bardflute_05_02.xwm
+flute_05_03	flute	CutiePie	Ashokan Farewell (Low F)	flute/mus_bardflute_05_03.xwm
+flute_05_04	flute	Kirsten Olstaff	The Kerry Polka	flute/mus_bardflute_05_04.xwm
+flute_05_05	flute	CutiePie	Fallen Through Time (Outlander)	flute/mus_bardflute_05_05.xwm
+flute_06_01	flute	Phyllis Chan	Seven Medieval Tunes (Saltarello2)	flute/mus_bardflute_06_01.xwm
+flute_06_02	flute	Kirsten Olstaff	The Kesh Jig	flute/mus_bardflute_06_02.xwm
+flute_06_03	flute	Kirsten Olstaff	Rattlin' Bog	flute/mus_bardflute_06_03.xwm
+flute_06_04	flute	CutiePie	Hector The Hero	flute/mus_bardflute_06_04.xwm
+flute_06_05	flute	CutiePie	Morrowind Theme	flute/mus_bardflute_06_05.xwm
+lute_01_01	lute	Csaba Beke	Chroral Krisztus	lute/mus_bardlute_01_01.xwm
+lute_01_02	lute	David Van Ooijen	Herzog Augusti Dantz	lute/mus_bardlute_01_02.xwm
+lute_01_03	lute	David Van Ooijen	Ballet 3	lute/mus_bardlute_01_03.xwm
+lute_01_04	lute	David Van Ooijen	Ballet 4	lute/mus_bardlute_01_04.xwm
+lute_01_05	lute	David Van Ooijen	Branles - Adriaenssen 1584	lute/mus_bardlute_01_05.xwm
+lute_01_06	lute	David Van Ooijen	Branles De Bourgoingne	lute/mus_bardlute_01_06.xwm
+lute_01_07	lute	David Van Ooijen	Junckheren Dantz	lute/mus_bardlute_01_07.xwm
+lute_01_08	lute	Trond Bengtson	A Babe Is Born	lute/mus_bardlute_01_08.xwm
+lute_01_09	lute	Trond Bengtson	Down In Yon Forest	lute/mus_bardlute_01_09.xwm
+lute_02_01	lute	Csaba Beke	Chorea A Lcsei Virgina	lute/mus_bardlute_02_01.xwm
+lute_02_02	lute	David Van Ooijen	The Third Branle Of Malte	lute/mus_bardlute_02_02.xwm
+lute_02_03	lute	David Van Ooijen	Ballet 1	lute/mus_bardlute_02_03.xwm
+lute_02_04	lute	David Van Ooijen	Baurenn Dantz - Schaffer Dantz	lute/mus_bardlute_02_04.xwm
+lute_02_05	lute	David Van Ooijen	Branle D Arras	lute/mus_bardlute_02_05.xwm
+lute_02_06	lute	David Van Ooijen	Corrente 2	lute/mus_bardlute_02_06.xwm
+lute_02_07	lute	David Van Ooijen	Der Rolandt	lute/mus_bardlute_02_07.xwm
+lute_02_08	lute	Trond Bengtson - Allan Alexander	George Hughes Farewell	lute/mus_bardlute_02_08.xwm
+lute_02_09	lute	Trond Bengtson - Turlough Carolan	Blind Mary	lute/mus_bardlute_02_09.xwm
+lute_03_01	lute	Csaba Beke	Chorea Polonica	lute/mus_bardlute_03_01.xwm
+lute_03_02	lute	Trond Bengtson	Cary Jane	lute/mus_bardlute_03_02.xwm
+lute_03_03	lute	David Van Ooijen	Balletto 1	lute/mus_bardlute_03_03.xwm
+lute_03_04	lute	David Van Ooijen	Ballettode Florenza	lute/mus_bardlute_03_04.xwm
+lute_03_05	lute	David Van Ooijen	Bergamasca	lute/mus_bardlute_03_05.xwm
+lute_03_06	lute	David Van Ooijen	Branle De Poictou	lute/mus_bardlute_03_06.xwm
+lute_03_07	lute	David Van Ooijen	Schäfer Tantz - Todten Tantz	lute/mus_bardlute_03_07.xwm
+lute_03_08	lute	David Van Ooijen	Volte Jungker Hans	lute/mus_bardlute_03_08.xwm
+lute_03_09	lute	Trond Bengtson	Salley Gardens	lute/mus_bardlute_03_09.xwm
+lute_04_01	lute	Csaba Beke	Basse Dance	lute/mus_bardlute_04_01.xwm
+lute_04_02	lute	David Van Ooijen	Ballet 2	lute/mus_bardlute_04_02.xwm
+lute_04_03	lute	David Van Ooijen	Ballet Rutteno - Ballo Polacho	lute/mus_bardlute_04_03.xwm
+lute_04_04	lute	David Van Ooijen	Balletto 2	lute/mus_bardlute_04_04.xwm
+lute_04_05	lute	David Van Ooijen	Branles	lute/mus_bardlute_04_05.xwm
+lute_04_06	lute	David Van Ooijen	Spagnoletta	lute/mus_bardlute_04_06.xwm
+lute_04_07	lute	David Van Ooijen	Tant Que Vivray	lute/mus_bardlute_04_07.xwm
+lute_04_08	lute	Trond Bengtson - Allan Alexander	Lindas Love	lute/mus_bardlute_04_08.xwm
+lute_04_09	lute	Trond Bengtson	Sussex Carol	lute/mus_bardlute_04_09.xwm

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+	<moduleName>Bard Hero - The Roadie</moduleName>
+	<moduleImage path="Images\roadie.jpg"/>
+
+	<!-- ⚠ THIS INSTALLS NO GAME FILES AT ALL, and that is the point.
+	     The Roadie is a tool you run yourself, not a mod: nothing here is
+	     read by Skyrim, nothing is loaded by SKSE, and nothing needs to be
+	     enabled. It is packaged as a FOMOD purely so the installer can say
+	     what it does BEFORE anyone runs it - a downloader that explains
+	     itself after the fact is a downloader nobody should trust.
+
+	     Everything lands under a single "Bard Hero - The Roadie" folder so it
+	     is easy to find and easy to delete. Under Mod Organizer 2, use
+	     right-click the mod -> Open in Explorer to get at it; MO2's virtual
+	     file system means browsing to the Data folder will not show it. -->
+	<requiredInstallFiles>
+		<folder source="tool" destination="Bard Hero - The Roadie" priority="0"/>
+	</requiredInstallFiles>
+
+	<installSteps order="Explicit">
+		<installStep name="What The Roadie does">
+			<optionalFileGroups order="Explicit">
+				<group name="Please read this before running it" type="SelectAtMostOne">
+					<plugins order="Explicit">
+						<plugin name="I understand - install it">
+							<description>THE ROADIE IS NOT A MOD. It is a small tool you run once, yourself, outside the game. It changes nothing about Skyrim, adds no plugin, and needs nothing enabled.
+
+WHAT IT DOES
+Downloads 22 guitar charts and unpacks them into Documents\My Games\Skyrim Special Edition\Bard Hero Songs\guitar, where Bard Hero picks them up on its own - no restart, nothing to press. These are the charts Bard Hero has actually been played against, and each one is pinned by hash, so you get the exact version that was tested or nothing at all.
+
+WHERE THE FILES COME FROM
+Encore (files.enchor.us), the public chart service the Bridge app uses. It is a plain request for a file - no account, no login, and nothing about you or your game is sent anywhere. Bard Hero itself never connects to the internet; this separate tool is the only part that does, and only when you run it.
+
+WHY A LIST AND NOT A FOLDER OF SONGS
+A chart is somebody's audio and somebody's charting work. Shipping you the list instead of the songs means the charts reach you from the people who made them, with their names attached.
+
+HOW TO RUN IT
+Open the "Bard Hero - The Roadie" folder this installs and double-click "Run The Roadie.bat". In Mod Organizer 2, right-click the mod and choose Open in Explorer - the Data folder will not show it, because MO2 virtualises that.
+
+It needs nothing installed. No Python, no extra tools. Both the .bat and the script are plain text, so read them in Notepad first if you would rather not take a mod's word for it.
+
+INSTALLING SOMEWHERE ELSE
+It defaults to Documents\My Games\Skyrim Special Edition\Bard Hero Songs\guitar. To use another folder, run it with:
+    powershell -ExecutionPolicy Bypass -File "songfetch\Get-BardHeroSongs.ps1" -SongsFolder "D:\Wherever\guitar"
+Add -WhatIfOnly to see what it would do without downloading anything.
+
+WANT MORE THAN 22 SONGS
+Use Bridge, the Clone Hero chart browser. It browses the whole public database rather than a fixed list, and it writes into the same folder layout. The mod page has the setup - it is three settings and then you are done. The Roadie is a starting repertoire, not a limit.
+
+Thanks for installing, and if you enjoy it, a kind endorsement is always appreciated.</description>
+							<image path="Images\roadie.jpg"/>
+							<typeDescriptor>
+								<type name="Recommended"/>
+							</typeDescriptor>
+						</plugin>
+					</plugins>
+				</group>
+			</optionalFileGroups>
+		</installStep>
+	</installSteps>
+</config>

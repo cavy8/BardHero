@@ -1,0 +1,9 @@
+build/
+install/
+release/
+tools/build.log
+tools/test.log
+.vs/
+ConvertHero/
+__pycache__/
+*.py[cod]

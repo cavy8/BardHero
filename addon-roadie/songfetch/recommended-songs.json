@@ -1,0 +1,244 @@
+{
+  "$schema-note": [
+    "BardHero's recommended song list. This ships with the mod; the CHARTS DO",
+    "NOT. Each entry names a chart on Encore by hash, and tools/fetch_songs.py",
+    "downloads it onto the player's own machine - so nobody redistributes",
+    "someone else's audio or charting work, and the mod stays kilobytes.",
+    "",
+    "Fields:",
+    "  md5      - Encore's chart hash. It is the CDN key, not a checksum.",
+    "  sha256   - of the downloaded .sng. Left out when pinning; the tool",
+    "             records it on first fetch and verifies it forever after.",
+    "  novideo  - true for charts with a video background, which fetches the",
+    "             smaller _novideo package. BardHero renders no video.",
+    "  note     - why this chart earned its place. Ignored by the tool, read",
+    "             by whoever wonders later whether it can be swapped out.",
+    "  artist/name - must match the chart's own metadata: the tool derives the",
+    "             song folder from them to know what is already installed.",
+    "  unlock_rank - OPTIONAL, 1-5. Written into the downloaded song.ini.",
+    "             Only needed when a chart's ini omits diff_guitar, because",
+    "             UnlockLogic reads an absent diff_guitar as rank 1 and would",
+    "             hand the player its hardest songs first. Set it from what",
+    "             another upload of the SAME song declares, not from taste.",
+    "             Never overwrites a rank already present on disk.",
+    "",
+    "To add a song:",
+    "  python tools/fetch_songs.py search \"artist title\"",
+    "  Search SCREENS each result on metadata the API returns: identical",
+    "  difficulty tracks (compared by trackHash), six-fret GHL the loader",
+    "  rejects, and a missing diff_guitar - which UnlockLogic reads as rank 1,",
+    "  so the hardest chart in a set can arrive unlocked from the start. The",
+    "  screen is validated against the pinned entry below, whose note counts",
+    "  it reproduces exactly.",
+    "  It only ever rules a chart OUT. PLAY a survivor before pinning it -",
+    "  no metadata can tell you the audio is the right track, or that the",
+    "  chart is any fun.",
+    "",
+    "To install everything pinned here:",
+    "  python tools/fetch_songs.py sync dist/SKSE/Plugins/BardHero/recommended-songs.json \"<songs root>\\guitar\""
+  ],
+  "songs": [
+    {
+      "md5": "fd9693cbbecbe6e0f309dfc4a362284d",
+      "artist": "AC/DC",
+      "name": "You Shook Me All Night Long",
+      "charter": "Mickelräven",
+      "novideo": false,
+      "note": "Play-tested. The 2026-07-25 Bridge audit made this the reference tracer: a real notes.mid with genuine Easy/Medium/Hard/Expert reductions (269/355/444/526 notes), seven Star Power phrases on every difficulty, and a dedicated guitar.opus stem. Three of the other four charts audited that day had identical or fake difficulty tracks, and a fifth was six-fret GHL the loader rejects outright - so this one is the standard the rest are measured against, not just a song.",
+      "sha256": "5262baf03e0160ba9ed144718ed898338396fb7ef063e0b701efa1ebe1bdb85a"
+    },
+    {
+      "md5": "4f2b21cc98f636518ea4b3f45c6f1327",
+      "artist": "KoRn",
+      "name": "Freak on a Leash",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Play-tested. Harmonix's Rock Band conversion: 170/204/313/456 notes across four genuinely distinct difficulty tracks, with separate guitar, rhythm, keys, drum and vocal stems - so a miss drops the guitar out of a real mix rather than thinning the whole song. song.ini says diff_guitar = 1, so it lands at the bottom of the unlock ladder and is one of the first modern tracks a player can reach.",
+      "sha256": "65d936682b428a0d91278040c49c374197f5f208e045b88ff9b1dcc655ee7db9"
+    },
+    {
+      "md5": "3fbb8a19ea8dc93b186ffd26bce8e6ce",
+      "artist": "Gorillaz",
+      "name": "Feel Good Inc.",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Play-tested. Harmonix's Rock Band conversion: 165/320/454/546 notes across four distinct difficulty tracks, full stem separation. The gentlest chart in the set at 165 Easy notes - the one to hand somebody who has never held a plastic guitar. diff_guitar = 2 puts it just above Freak on a Leash.",
+      "sha256": "db7adf4184623c81d70fea59339ebf2314329633ceff7c301d4cba09d474267e"
+    },
+    {
+      "md5": "fe5608028d860fca92efc2e16f6bbef7",
+      "artist": "Avenged Sevenfold",
+      "name": "Bat Country",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Play-tested. Harmonix's Rock Band conversion: 322/553/907/1381 notes across four distinct difficulty tracks, full stem separation. diff_guitar = 6 clamps to rank 5, so this is the top of the curated ladder - the reward for working up through the others rather than a starting point.",
+      "sha256": "d69f3540f78df11030df6cf4a12b1323ff59e6513c6cfbe5cbff928381e96f76"
+    },
+    {
+      "md5": "9938bd338b2cbe2615692ac99bef4764",
+      "artist": "Rage Against the Machine",
+      "name": "Killing in the Name",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call that the classics carry their own recommendation. Harmonix's Rock Band conversion: 232/411/644/1357 notes across four distinct difficulty tracks, guitar plus five backing stems. diff_guitar = 3.",
+      "sha256": "e40d36974143ceabcfb31e830ce7d5c13cb49f7276d3299aff58320cf4abd487"
+    },
+    {
+      "md5": "b594efbda5b7bdd19d29794bbc162f8c",
+      "artist": "Queens of the Stone Age",
+      "name": "3's & 7's",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. Harmonix's Rock Band conversion: 422/488/733/879 notes across four distinct difficulty tracks, guitar plus four backing stems. diff_guitar = 3.",
+      "sha256": "736210ccffcc72b43569b1fef947055af01fed9a3637491556a68281f5a4bfc7"
+    },
+    {
+      "md5": "ce46533d50f4d26a92e8b23dd2897c2d",
+      "artist": "Pearl Jam",
+      "name": "Even Flow",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. Harmonix's Rock Band conversion: 352/513/764/1205 notes across four distinct difficulty tracks, guitar plus seven backing stems including a crowd track. diff_guitar = 4.",
+      "sha256": "88a5937195c78f761761ccfdc532d0d47ffb4bd1c43493d52abb77030431b927"
+    },
+    {
+      "md5": "8c511673e71428dac78ea67e86ed9d51",
+      "artist": "Tenacious D",
+      "name": "Tribute",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. Harmonix's Rock Band conversion: 228/362/689/1019 notes across four distinct difficulty tracks, guitar plus six backing stems. diff_guitar = 5.",
+      "sha256": "f5bf948afbeba02df67e231228571fa4bc29478df25e71d7cac350df017da4a9"
+    },
+    {
+      "md5": "aba823cf608df3fba8d2f1c4eb006a1c",
+      "artist": "AC/DC",
+      "name": "Let There Be Rock",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. Harmonix's Rock Band conversion: 307/590/1017/1552 notes across four distinct difficulty tracks, guitar plus six backing stems. At 6:10 it is among the longest in the set, which the gold-scaling curve pays out for. diff_guitar = 5, so no unlock_rank override is needed.",
+      "sha256": "0ac424bbf481c6fb8cee5234bed61c1e3f94c0a81f565373b301135aec7430b9"
+    },
+    {
+      "md5": "f2a02bda88adc1ea60b3d2612a8c6af3",
+      "artist": "Metallica",
+      "name": "One",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. The best-equipped chart in the set: 835/1323/1714/2146 notes across four distinct difficulty tracks, and the fullest stem layout of anything pinned here - guitar, bass, four drum stems, vocals and a crowd track. diff_guitar = 6 clamps to rank 5, so unlike the other Neversoft cuts it needs no unlock_rank override. A second Neversoft upload of One exists (md5 f199b1be..., 7:28) whose ini omits diff_guitar; this is the better one.",
+      "sha256": "293fc8723f7ee9c7ed2a0c6ac0ffafb80c939fae4fe0e205ce83e65df8b223b4"
+    },
+    {
+      "md5": "14b422a6433e5bb052dbee4d3e372f86",
+      "artist": "Muse",
+      "name": "Knights of Cydonia",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. 587/959/1596/1917 notes across four distinct difficulty tracks, with guitar and rhythm stems separate from the backing. Verified 2026-07-26 to be the ONLY usable upload: of the four on Encore, two are Expert-only and one is six-fret GHL the loader rejects outright. Its ini omits diff_guitar, hence the override.",
+      "unlock_rank": 5,
+      "sha256": "d349ad9b8a8c44d491f3746764756058eb002bba8be80a7831c990398e0fd103"
+    },
+    {
+      "md5": "6e7e910c1c576eb5064a989e07d7841f",
+      "artist": "Guns N' Roses",
+      "name": "Welcome To The Jungle",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. 425/587/748/937 notes across four distinct difficulty tracks. Chosen over the 'Unknown Charter' upload of the SAME charting (identical note counts, md5 d5dfc98a...) because that one ships guitar.opus as its only stem - a miss would fade the whole song and the Star Power flanger would sit on the vocal. This cut separates guitar, rhythm and backing. It trades away diff_guitar, hence the override.",
+      "unlock_rank": 5,
+      "sha256": "68c1f4d7bfb90cf8ee7c89f83e82933d52058979cb1e01b427703774efe715a6"
+    },
+    {
+      "md5": "25f20c0cf2ce0a3fa2707e5ad4731948",
+      "artist": "Eric Johnson",
+      "name": "Cliffs Of Dover",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27 on the owner's call. 381/631/929/1240 notes across four distinct difficulty tracks, guitar and rhythm separate from the backing. NOTE this is a DIFFERENT charting from the Wagsii upload (414/610/846/1261, md5 66884558...), not the same chart repackaged - Wagsii's declares diff_guitar = 5 but ships song.opus alone, so a miss there is silent. unlock_rank mirrors what Wagsii declares for the same song.",
+      "unlock_rank": 5,
+      "sha256": "c131306e98b7d477d23f48d43f79ca0ae37a6d5b6d5249910b4ba245cad94c08"
+    },
+    {
+      "md5": "8221e66963eda08f21a8025d9739f77a",
+      "artist": "Coldplay",
+      "name": "In My Place",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 330/397/433/457 notes across four distinct difficulty tracks, guitar plus seven backing stems. The flattest difficulty curve in the set - Easy is only 127 notes below Expert - so it plays much the same however far up the ladder you are. diff_guitar = 2.",
+      "sha256": "135a8e12a28f5907566080f0fc97f43ffe28ad440bc4694e809950c897c6f8e8"
+    },
+    {
+      "md5": "2089cb04fbd3f5ada1489e7b80239945",
+      "artist": "Nirvana",
+      "name": "Smells Like Teen Spirit",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 446/612/787/854 notes across four distinct difficulty tracks, guitar plus eight backing stems. diff_guitar = 2.",
+      "sha256": "cb4f0c00f3b7b00514cc4f5e271139fdc87d255a69bf51cd1704c255152d5771"
+    },
+    {
+      "md5": "9201088158c107853d52e3483fca4838",
+      "artist": "Red Hot Chili Peppers",
+      "name": "Californication",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. Harmonix's Rock Band conversion: 245/380/583/869 notes across four distinct difficulty tracks, guitar plus seven backing stems. diff_guitar = 2.",
+      "sha256": "4aa2d271643a69e823714b3d504932cf2ebde0000ad2b12b145c17a6e5545bfb"
+    },
+    {
+      "md5": "8c1d38b40a1c4bbf0b58f5c2fc058056",
+      "artist": "System of a Down",
+      "name": "Toxicity",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 358/608/896/967 notes across four distinct difficulty tracks, and the most separated mix pinned here at ten audio files. diff_guitar = 3.",
+      "sha256": "89a809125b0f6af89f5ae4adf84b57314de45bd57999f00fc9c9fd07ce7da23b"
+    },
+    {
+      "md5": "84306ffb17e4ad279546563dc6a5888e",
+      "artist": "Stevie Wonder",
+      "name": "Superstition",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 478/632/779/1083 notes across four distinct difficulty tracks, guitar plus seven backing stems. The one chart here that is funk rather than rock, worth keeping when the rest of the list leans hard one way. diff_guitar = 3.",
+      "sha256": "3feee9097216d478976d6f4a50956e3116b5ae14353aa686cab80ecc8682f9d1"
+    },
+    {
+      "md5": "e8980990a1a6c38363533ce387cd1cc1",
+      "artist": "Lynyrd Skynyrd",
+      "name": "Free Bird",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 785/1445/1964/2394 notes across four distinct difficulty tracks, guitar plus seven backing stems. At 9:47 it is by far the longest chart in the set - more than twice the curated median - so it sits at the top of the gold-scaling curve and is a real commitment to start. diff_guitar = 3 puts it mid-ladder, which understates the endurance rather than the difficulty.",
+      "sha256": "1ae801f7dd337732fba6940792fabff9cab131dccd1d3b214149380592dfa2e6"
+    },
+    {
+      "md5": "9f14afc228e3e5f77e9adc8cc570595b",
+      "artist": "Megadeth",
+      "name": "Symphony of Destruction",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 446/510/647/810 notes across four distinct difficulty tracks, guitar plus seven backing stems. diff_guitar = 4.",
+      "sha256": "aabb18eaaa2677459d3f6505c780a16b62d9a474452beed4c3f2bd146e8d45d7"
+    },
+    {
+      "md5": "3b2596a35351dac76a4bc4647359b467",
+      "artist": "Living Colour",
+      "name": "Cult of Personality",
+      "charter": "Harmonix",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. Harmonix's Rock Band conversion: 217/358/603/1150 notes across four distinct difficulty tracks, guitar plus five backing stems. The steepest curve in the set - Expert is more than five times Easy - so it rewards climbing the ladder more than anything else pinned here. diff_guitar = 6 clamps to rank 5.",
+      "sha256": "e75681ef0e35d279ad52eed79f4640f9bcde7b4d405e9c9d74689af9025cc9c6"
+    },
+    {
+      "md5": "292e66bb8d2d42a8353497697ffc225a",
+      "artist": "The Fall of Troy",
+      "name": "F.C.P.R.E.M.I.X.",
+      "charter": "Neversoft",
+      "novideo": false,
+      "note": "Screened, NOT play-tested - pinned 2026-07-27. 485/903/1198/1362 notes across four distinct difficulty tracks, guitar and rhythm separate from the backing. FINDING IT IS THE TRAP: searching the literal 'F.C.P.R.E.M.I.X.' works, but stripping the punctuation first does NOT - the tokens 'F C P R E M I X' match nothing, which is why an earlier pass wrongly concluded this song was absent from Encore. Four uploads exist; one is six-fret GHL and one is Expert-only. The alternative worth knowing is uSound/InternalDivide (305/599/985/1349, md5 4d02066b...), a different charting that declares diff_guitar = 6 and so needs no override. This one omits diff_guitar, hence unlock_rank mirroring that 6.",
+      "unlock_rank": 5,
+      "sha256": "f818d15f5f3f5d0ca88ee2728820fdf3241551261093fa25c74935d6b45696c0"
+    }
+  ]
+}

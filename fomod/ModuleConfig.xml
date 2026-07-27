@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+	<moduleName>Bard Hero</moduleName>
+	<moduleImage path="Images\bardhero.jpg"/>
+
+	<!-- One DLL covers SE 1.5.97 and AE 1.6.1130+, so there is no runtime
+	     choice to make. The only choice is whether to install the Doom Lute,
+	     which is the one part that adds a plugin. Everything else - the
+	     highway, the songbook, the scoring, the crowd - is in the required
+	     files and has no ESP at all.
+
+	     Game files ONLY in the install directives: the readme and the
+	     third-party notices ship at the archive ROOT and are never installed
+	     to Data. Flat docs at the Data root collide across mods and show up
+	     as overwrite conflicts in MO2. -->
+	<requiredInstallFiles>
+		<folder source="core\SKSE" destination="SKSE" priority="0"/>
+	</requiredInstallFiles>
+
+	<installSteps order="Explicit">
+		<installStep name="Bard Hero">
+			<optionalFileGroups order="Explicit">
+				<group name="The Doom Lute (optional - adds one plugin)" type="SelectAny">
+					<plugins order="Explicit">
+						<plugin name="Doom Lute - electric guitar">
+							<description>An electric guitar for Skyrim, and the only part of Bard Hero that adds a plugin (Bard Hero - Doom Lute.esp).
+
+OPEN ANIMATION REPLACER, FOR THE ANIMATIONS ONLY. Everything else here works without it - the guitar, the crafting, the band, the songs. What you lose is the custom animation set: you get the ordinary lute idles instead, with no error and nothing in the log, so it just looks like the animations were never made. You do NOT need Nemesis or FNIS; this only replaces existing animations and adds nothing to the behavior graph.
+
+INVENTORY INTERFACE INFORMATION INJECTOR (I4), FOR THE INVENTORY CARD ONLY. With it the Doom Lute reads as an Instrument and gets a proper instrument icon. Without it the guitar works exactly the same - it just sits in your inventory labelled Clutter. That is not something the plugin can fix: Skyrim has no instrument keyword at all, and an item's type is painted by the interface rather than stored in the record, so a rule for I4 is the only way to set it. The rule ships in this component and does nothing at all if I4 is absent.
+
+You do not just find it. Craft it at the Atronach Forge from a Lute, Void Salts, a Centurion Dynamo Core and a Filled Black Soul Gem - the recipe is added at runtime, so it does not conflict with anything else that touches the forge lists, and it works whatever your load order looks like.
+
+Playing on the Doom Lute puts the game in its guitar context, which is what makes modern five-fret charts fit. The base mod's lute, flute and drum all work exactly the same without this.
+
+Leave it unticked if you want a purely lore-friendly Skyrim, or if you would rather have no extra plugin in your load order. You can run this installer again later to add it.
+
+Bard Hero does not include any songs and never connects to the internet. Charts come from Bridge, the standard Clone Hero chart browser - point it at Documents\Bard Hero Songs\guitar and they show up in the Songbook.
+
+Thanks for installing, and if you enjoy it, a kind endorsement is always appreciated.</description>
+							<image path="Images\bardhero.jpg"/>
+							<files>
+								<file source="optional\doomlute\Bard Hero - Doom Lute.esp" destination="Bard Hero - Doom Lute.esp" priority="0"/>
+								<folder source="optional\doomlute\meshes" destination="meshes" priority="0"/>
+								<folder source="optional\doomlute\textures" destination="textures" priority="0"/>
+								<folder source="optional\doomlute\SKSE" destination="SKSE" priority="1"/>
+							</files>
+							<typeDescriptor>
+								<type name="Recommended"/>
+							</typeDescriptor>
+						</plugin>
+					</plugins>
+				</group>
+			</optionalFileGroups>
+		</installStep>
+	</installSteps>
+</config>

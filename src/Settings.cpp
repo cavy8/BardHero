@@ -263,6 +263,16 @@ namespace SH {
             ini.GetDoubleValue("Gold", "fPayoutLengthMin", payoutLengthMin);
         payoutLengthMax =
             ini.GetDoubleValue("Gold", "fPayoutLengthMax", payoutLengthMax);
+        // INI-only tuning, read here and deliberately never written by the
+        // save path (iFret*Key2 precedent): these have no settings-tool UI,
+        // so writing them back would only pin today's defaults against a
+        // future rebalance.
+        audienceRadius = ini.GetDoubleValue(
+            "Gold", "fAudienceRadius", audienceRadius);
+        audiencePayLone = ini.GetDoubleValue(
+            "Gold", "fAudiencePayLone", audiencePayLone);
+        audienceFullAt = static_cast<int>(ini.GetLongValue(
+            "Gold", "iAudienceFullAt", audienceFullAt));
         // Bound what the INI can put into the payout formula - this is where
         // untrusted input enters. payout::Deserved rounds with std::lround
         // BEFORE clamping to [0, cap], so a buskBase above about 1.43e9
@@ -278,6 +288,11 @@ namespace SH {
         renownAtRank1   = std::clamp(renownAtRank1, 0.0, 1.0);
         moodPayTerrible = std::clamp(moodPayTerrible, 0.0, 1.0);
         payoutCap       = std::max(0, payoutCap);
+        // radius 0 disables counting; the ceiling is a loaded-cell scale,
+        // past which "in earshot" stops meaning anything
+        audienceRadius  = std::clamp(audienceRadius, 0.0, 16384.0);
+        audiencePayLone = std::clamp(audiencePayLone, 0.0, 1.0);
+        audienceFullAt  = std::clamp(audienceFullAt, 1, 100);
         // The star bars are array/curve inputs, so bound them here rather
         // than trusting every consumer to clamp. A positive bar below the
         // neutral one would make a good run read as a bad one.
@@ -450,52 +465,84 @@ namespace SH {
         ini.SetLongValue("SGT", "iXpPerStar", xpPerStar);
         ini.SetLongValue("SGT", "iXpBonus5", xpBonus5);
         ini.SetLongValue("Gold", "iPayoutMinStars", payoutMinStars);
-        ini.SetDoubleValue("Difficulty", "fHitWindowScale",
-                           tuning.hitWindowScale);
-        ini.SetDoubleValue("Difficulty", "fStrumLeniencySec",
-                           tuning.strumLeniencySec);
-        ini.SetDoubleValue("Difficulty", "fEarlyStrumLeniencySec",
-                           tuning.earlyStrumLeniencySec);
-        ini.SetDoubleValue("Difficulty", "fHopoLeniencySec",
-                           tuning.hopoLeniencySec);
-        ini.SetDoubleValue("Difficulty", "fSustainDropLeniencySec",
-                           tuning.sustainDropLeniencySec);
-        ini.SetBoolValue("Difficulty", "bInfiniteFrontEnd",
-                         tuning.infiniteFrontEnd);
-        ini.SetBoolValue("Difficulty", "bAntiGhosting",
-                         tuning.antiGhosting);
-        ini.SetLongValue("Difficulty", "iMaxMultiplier",
-                         tuning.maxMultiplier);
-        ini.SetDoubleValue("Difficulty", "fGloryMeterSpanHits",
-                           tuning.gloryMeterSpanHits);
-        ini.SetDoubleValue("Difficulty", "fGloryBadWeight",
-                           tuning.gloryBadWeight);
-        ini.SetDoubleValue("Difficulty", "fGloryStarPowerHitScale",
-                           tuning.gloryStarPowerHitScale);
-        ini.SetDoubleValue("Difficulty", "fGloryStarPowerBadScale",
-                           tuning.gloryStarPowerBadScale);
-        ini.SetDoubleValue("Difficulty", "fGloryOpeningSec",
-                           tuning.gloryOpeningSec);
-        ini.SetDoubleValue("Difficulty", "fGloryOpeningBadScale",
-                           tuning.gloryOpeningBadScale);
-        ini.SetLongValue("Difficulty", "iGloryRecoveryHits",
-                         tuning.gloryRecoveryHits);
-        ini.SetDoubleValue("Difficulty", "fGloryRedBelow",
-                           tuning.gloryRedBelow);
-        ini.SetDoubleValue("Difficulty", "fGloryGreenAt",
-                           tuning.gloryGreenAt);
-        ini.SetDoubleValue("Difficulty", "fFailureDangerBelow",
-                           tuning.failureDangerBelow);
-        ini.SetDoubleValue("Difficulty", "fFailureRecoverAt",
-                           tuning.failureRecoverAt);
-        ini.SetDoubleValue("Difficulty", "fFailureGraceSec",
-                           tuning.failureGraceSec);
-        ini.SetDoubleValue("Difficulty", "fFailureStartSec",
-                           tuning.failureStartSec);
-        ini.SetLongValue("Difficulty", "iFailureFurtherBad",
-                         tuning.failureFurtherBad);
-        ini.SetDoubleValue("Difficulty", "fAudienceCommentDelaySec",
-                           tuning.audienceCommentDelaySec);
+        // [Difficulty] writes only what differs from the compiled defaults
+        // and DELETES keys that match them. The unconditional writes this
+        // replaces pinned the whole section at save-time values, so the
+        // 2026-07-25 Glory rebalance (7.5/12 -> 4.0/3) never reached any
+        // install whose settings tool had ever saved - the INI kept
+        // re-asserting the old numbers as if the user had chosen them.
+        // Same failure as the muffle-list pin (d11cdd0), and the same
+        // principle as the secondary keyboard column below, which is
+        // deliberately never written. Values a user actually changed
+        // differ from the defaults, so those still persist.
+        {
+            const difficulty::Tuning defs;
+            auto setD = [&](const char* a_key, double a_v, double a_def) {
+                if (a_v == a_def) {
+                    ini.Delete("Difficulty", a_key, true);
+                } else {
+                    ini.SetDoubleValue("Difficulty", a_key, a_v);
+                }
+            };
+            auto setL = [&](const char* a_key, long a_v, long a_def) {
+                if (a_v == a_def) {
+                    ini.Delete("Difficulty", a_key, true);
+                } else {
+                    ini.SetLongValue("Difficulty", a_key, a_v);
+                }
+            };
+            auto setB = [&](const char* a_key, bool a_v, bool a_def) {
+                if (a_v == a_def) {
+                    ini.Delete("Difficulty", a_key, true);
+                } else {
+                    ini.SetBoolValue("Difficulty", a_key, a_v);
+                }
+            };
+            setD("fHitWindowScale", tuning.hitWindowScale,
+                 defs.hitWindowScale);
+            setD("fStrumLeniencySec", tuning.strumLeniencySec,
+                 defs.strumLeniencySec);
+            setD("fEarlyStrumLeniencySec", tuning.earlyStrumLeniencySec,
+                 defs.earlyStrumLeniencySec);
+            setD("fHopoLeniencySec", tuning.hopoLeniencySec,
+                 defs.hopoLeniencySec);
+            setD("fSustainDropLeniencySec", tuning.sustainDropLeniencySec,
+                 defs.sustainDropLeniencySec);
+            setB("bInfiniteFrontEnd", tuning.infiniteFrontEnd,
+                 defs.infiniteFrontEnd);
+            setB("bAntiGhosting", tuning.antiGhosting, defs.antiGhosting);
+            setL("iMaxMultiplier", tuning.maxMultiplier,
+                 defs.maxMultiplier);
+            setD("fGloryMeterSpanHits", tuning.gloryMeterSpanHits,
+                 defs.gloryMeterSpanHits);
+            setD("fGloryBadWeight", tuning.gloryBadWeight,
+                 defs.gloryBadWeight);
+            setD("fGloryStarPowerHitScale", tuning.gloryStarPowerHitScale,
+                 defs.gloryStarPowerHitScale);
+            setD("fGloryStarPowerBadScale", tuning.gloryStarPowerBadScale,
+                 defs.gloryStarPowerBadScale);
+            setD("fGloryOpeningSec", tuning.gloryOpeningSec,
+                 defs.gloryOpeningSec);
+            setD("fGloryOpeningBadScale", tuning.gloryOpeningBadScale,
+                 defs.gloryOpeningBadScale);
+            setL("iGloryRecoveryHits", tuning.gloryRecoveryHits,
+                 defs.gloryRecoveryHits);
+            setD("fGloryRedBelow", tuning.gloryRedBelow,
+                 defs.gloryRedBelow);
+            setD("fGloryGreenAt", tuning.gloryGreenAt, defs.gloryGreenAt);
+            setD("fFailureDangerBelow", tuning.failureDangerBelow,
+                 defs.failureDangerBelow);
+            setD("fFailureRecoverAt", tuning.failureRecoverAt,
+                 defs.failureRecoverAt);
+            setD("fFailureGraceSec", tuning.failureGraceSec,
+                 defs.failureGraceSec);
+            setD("fFailureStartSec", tuning.failureStartSec,
+                 defs.failureStartSec);
+            setL("iFailureFurtherBad", tuning.failureFurtherBad,
+                 defs.failureFurtherBad);
+            setD("fAudienceCommentDelaySec", tuning.audienceCommentDelaySec,
+                 defs.audienceCommentDelaySec);
+        }
         // Bindings tab (2026-07-27). The secondary keyboard column
         // (iFret1Key2 etc.) is deliberately NOT written: it is INI-only
         // bridge-layout territory, preserved by the load-merge above.

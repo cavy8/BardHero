@@ -53,6 +53,21 @@ namespace SH::payout {
         double lengthRefSec = 120.0;
         double lengthMin    = 0.5;
         double lengthMax    = 2.0;
+        // ---- audience ----------------------------------------------------
+        // Nobody around, nobody pays (field 2026-07-28: gold for a flawless
+        // set on an empty mountainside). The listener count is a
+        // time-weighted average over the whole song, so someone who walks
+        // off mid-set stops counting from that point, and someone who
+        // wanders in late counts for the part they heard.
+        //
+        // One listener is not a fraction of a crowd, it is the busking
+        // fantasy working as intended - a lone patron tipping a bard - so
+        // it pays audiencePayLone of the purse rather than 1/fullAt of it.
+        // Linear from there up to audienceFullAt listeners, where the purse
+        // is whole. SGT's own inn payout is untouched by all of this; the
+        // factor scales only what THIS feature adds.
+        double audiencePayLone = 0.40;
+        int    audienceFullAt  = 4;
     };
 
     // Length multiplier for a song of a_songSec. A non-positive reference
@@ -118,6 +133,22 @@ namespace SH::payout {
         }
     };
 
+    // Pay share for a time-averaged listener count. Piecewise linear:
+    // f(0) = 0, f(1) = audiencePayLone, f(fullAt) = 1, clamped above.
+    // Fractions below one listener scale the lone share - a patron present
+    // for 40% of the song is 40% of a lone patron. Non-finite or negative
+    // counts pay nothing: an empty room must never round up to a purse.
+    [[nodiscard]] inline double AudienceMult(double a_listeners,
+                                             const Params& p) {
+        if (!(a_listeners > 0.0)) { return 0.0; }
+        const double lone = std::clamp(p.audiencePayLone, 0.0, 1.0);
+        const int    full = std::max(p.audienceFullAt, 1);
+        if (a_listeners >= static_cast<double>(full)) { return 1.0; }
+        if (full == 1) { return a_listeners >= 1.0 ? 1.0 : a_listeners; }
+        if (a_listeners <= 1.0) { return lone * a_listeners; }
+        return lone + (1.0 - lone) * (a_listeners - 1.0) / (full - 1);
+    }
+
     // moodLevel matches crowd::Level: 0 terrible, 1 middling, 2 great.
     // songSec scales the purse by how long the set actually was.
     inline int Deserved(int stars, int moodLevel, int difficulty, int rank,
@@ -139,6 +170,19 @@ namespace SH::payout {
         const double gold = p.buskBase * mood * star * diff * venue * renown *
                             LengthMult(songSec, p);
         return std::clamp(static_cast<int>(std::lround(gold)), 0, p.cap);
+    }
+
+    // Audience-scaled purse. audience is the time-averaged listener count;
+    // a caller with no count should pass p.audienceFullAt, which pays the
+    // pre-audience figure rather than inventing an empty room.
+    inline int Deserved(int stars, int moodLevel, int difficulty, int rank,
+                        bool atInn, double songSec, double audience,
+                        const Params& p) {
+        const double aud = AudienceMult(audience, p);
+        if (aud <= 0.0) { return 0; }
+        const int base = Deserved(stars, moodLevel, difficulty, rank, atInn,
+                                  songSec, p);
+        return static_cast<int>(std::lround(base * aud));
     }
 
     // Back-compat overload: a song exactly at the reference length, so the

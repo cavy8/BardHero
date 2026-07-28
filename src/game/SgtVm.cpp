@@ -1279,6 +1279,26 @@ namespace SH::SgtVm {
             g_luteAnimOriginalModel);
     }
 
+    void ReassertAnimObjectBaseline() {
+        if (!g_luteAnimObject) {
+            g_luteAnimObject =
+                RE::TESForm::LookupByID<RE::TESObjectANIO>(
+                    kLuteAnimObjectId);
+        }
+        if (!g_luteAnimObject) { return; }
+        // The band never arms the override and never saves the original,
+        // so a lute-session band run reaches here with nothing saved; the
+        // vanilla path is a known constant, same pattern as BandStage's
+        // drink-potion restore.
+        const char* model =
+            g_guitarAnimOverride ? guitarprop::kAnimationObjectModel.data()
+            : g_luteAnimModelSaved ? g_luteAnimOriginalModel.c_str()
+                                   : "Meshes\\AnimObjects\\AnimObjectLute.nif";
+        g_luteAnimObject->SetModel(model);
+        spdlog::info("[band] AnimObjectLute baseline reasserted ({})",
+                     model);
+    }
+
     void ClearElectricPerformGlobal() {
         WriteElectricPerformGlobal(0.0f);
     }

@@ -142,12 +142,31 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     spdlog::info("{} v{} loading... (build {} {})", SH::kDisplayName,
                  SH::kVersion, __DATE__, __TIME__);
 
-    // Universal SE + AE build, same gate as Fitting Room: SE 1.5.97 or
-    // next-gen AE (1.6.1130+). Every engine address is runtime-resolved;
-    // AE hook offsets get byte-verified before install (InputHook).
+    // Universal SE + AE build: SE 1.5.97, or any AE from the first release
+    // (1.6.317) onward.
+    //
+    // The gate was 1.5.97 or next-gen AE 1.6.1130+ until 2026-07-28, copied
+    // from Fitting Room. That excluded 1.6.317 through 1.6.1129, which is
+    // where a large share of modded installs sit: 1.6.640 in particular, since
+    // many people downgraded there when the next-gen update landed and never
+    // moved. Those users got "reported as incompatible during load" on a DLL
+    // that had no actual reason to refuse them.
+    //
+    // Widening is safe because nothing here trusts a hardcoded layout:
+    //   - every engine address resolves through Address Library, which has a
+    //     database per runtime
+    //   - the InputHook dispatch site is byte-verified (must be E8) before the
+    //     write_call, and skips the hook on a mismatch
+    //   - PerformTriggerHook counts the PlayerCharacter vtable before hooking
+    //     and falls back if the count is unexpected
+    //   - the ControlMap members past controlMap[] are never read. That layout
+    //     shifts between AE builds (17 vs 18 input contexts) and reading it was
+    //     the 2026-07-22 input lock; the fix deleted the reads rather than
+    //     correcting an offset, which is what makes this range portable at all.
+    // So an unverified runtime degrades to a logged no-hook, never a bad write.
     const auto ver       = a_skse->RuntimeVersion();
     const bool supported = (ver == SKSE::RUNTIME_SSE_1_5_97) ||
-                           (ver >= REL::Version(1, 6, 1130, 0));
+                           (ver >= REL::Version(1, 6, 317, 0));
     if (!supported) {
         spdlog::error("Unsupported Skyrim runtime {}; not loading.", ver.string());
         return false;

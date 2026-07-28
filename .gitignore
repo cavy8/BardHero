@@ -1,6 +1,16 @@
 build/
 install/
-release/
+
+# release\ holds authored documents that the packaging scripts READ, not build
+# output: the playtest readmes, the notices, and licence texts for vendored
+# headers that carry no inline copyright (see release\licenses). A blanket
+# release\ ignore meant package_playtest.ps1 depended on files that were never
+# in the repo, so a fresh clone could not build an archive. Ignore whatever
+# else lands here, but keep those tracked.
+release/*
+!release/*.txt
+!release/licenses/
+
 tools/build.log
 tools/test.log
 .vs/

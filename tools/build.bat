@@ -33,8 +33,16 @@ rem
 rem `if errorlevel 1` rather than `if %errorlevel% neq 0`: inside a FOR body
 rem %errorlevel% is expanded ONCE when the block is parsed, so it would test
 rem the value from before the loop and pass whatever the suites did.
+rem
+rem NO `$` ANCHOR. The pattern was `^build.*Tests\.exe$` from 2026-07-26 until
+rem 2026-07-28 and matched NOTHING, so this script failed at the test step
+rem every single run for two days: findstr counts the CR of a CRLF file as
+rem part of the line, so `exe$` never sits at what findstr thinks is the end.
+rem A .NET regex over the same file matches all 41 suites, which is what made
+rem it look like the file was at fault rather than the tool. `^build` still
+rem anchors the front, so rem lines and echoes mentioning a suite cannot match.
 set "RAN=0"
-for /f "usebackq tokens=*" %%L in (`findstr /r /c:"^build.*Tests\.exe$" "%~dp0test.bat"`) do (
+for /f "usebackq tokens=*" %%L in (`findstr /r /c:"^build.*Tests\.exe" "%~dp0test.bat"`) do (
     echo --- %%L
     %%L
     if errorlevel 1 goto :fail

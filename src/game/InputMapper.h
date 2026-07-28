@@ -73,6 +73,10 @@ namespace SH {
         void EmitEngageDiff(double qpcNowSec, const Binds& binds,
                             std::vector<MappedEvent>& out);
         void Reset();
+        // The engine was REBUILT (practice-loop seek): whatever it was told
+        // no longer exists over there. Call before EmitEngageDiff so the
+        // diff re-emits everything physically held.
+        void ForgetEngineState() { _heldEngine = false; }
 
     private:
         bool _heldRaw    = false;
@@ -110,6 +114,8 @@ namespace SH {
         void EmitEngageDiff(double qpcNowSec, const GamepadBinds& binds,
                             std::vector<MappedEvent>& out);
         void Reset();
+        // See InputMapper::ForgetEngineState.
+        void ForgetEngineState() { _heldEngine = 0; }
 
         std::uint8_t HeldFretMask() const { return _heldRaw & 0x1F; }
 
@@ -149,6 +155,15 @@ namespace SH {
                             std::vector<MappedEvent>& out);
 
         void Reset();  // new session: fresh seed + cleared held state
+
+        // The engine was REBUILT (practice-loop seek, SeekTo): its fret
+        // mask is zero again, so what the engine "last saw" is nothing,
+        // whatever this mapper remembers telling the old one. Without this,
+        // a fret held across the loop wrap diffs as already-known and the
+        // engage diff emits nothing - the note refuses to register until
+        // the player lifts and re-presses, with the strike-line pad sitting
+        // lit the whole time (field 2026-07-28).
+        void ForgetEngineState() { _heldEngine = 0; }
 
         // Physical fret bits 0-4 as last observed (render: fret press glow).
         std::uint8_t HeldFretMask() const { return _heldRaw & 0x1F; }

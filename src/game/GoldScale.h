@@ -19,11 +19,14 @@ namespace SH {
         // must not capture stray grants; the payout is dispatched at session
         // end instead and captured in a short end window.
         static void SetWholeSongLive(bool live);      // session thread
-        // stars/mood/inn/rank feed the performance payout (spec 5.6)
+        // stars/mood/inn/rank feed the performance payout (spec 5.6).
+        // audience is the time-averaged listener count near the player
+        // over the song; pass a negative value when counting was disabled
+        // and the purse should not be audience-scaled at all.
         static void ArmDeferred(int notesHit, int notesTotal, int difficulty,
                                 int stars, int moodLevel, int rank,
-                                bool atInn,
-                                double songSec);      // session thread
+                                bool atInn, double songSec,
+                                double audience);     // session thread
         static void CancelDeferred();                 // game thread (dispatch failed)
         static void OpenEndCapture();                 // game thread (payout sent)
         static void TickDeferred(double nowQpc);      // session thread, every loop

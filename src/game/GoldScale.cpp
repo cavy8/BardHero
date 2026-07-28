@@ -38,6 +38,8 @@ namespace SH {
         std::atomic<int>  g_defRank{ 1 };
         std::atomic<bool>   g_defAtInn{ false };
         std::atomic<double> g_defSongSec{ 0.0 };
+        // negative = counting disabled, purse not audience-scaled
+        std::atomic<double> g_defAudience{ -1.0 };
 
         goldscale::Params MakeParams() {
             const auto&      st = Settings::GetSingleton();
@@ -169,7 +171,8 @@ namespace SH {
 
     void GoldScale::ArmDeferred(int notesHit, int notesTotal, int difficulty,
                                 int stars, int moodLevel, int rank,
-                                bool atInn, double songSec) {
+                                bool atInn, double songSec,
+                                double audience) {
         g_defHit.store(notesHit);
         g_defTotal.store(notesTotal);
         g_defDiff.store(difficulty);
@@ -178,6 +181,7 @@ namespace SH {
         g_defRank.store(rank);
         g_defAtInn.store(atInn);
         g_defSongSec.store(songSec);
+        g_defAudience.store(audience);
         g_defArmed.store(true);
     }
 
@@ -235,10 +239,18 @@ namespace SH {
             pp.lengthRefSec    = st.payoutLengthRefSec;
             pp.lengthMin       = st.payoutLengthMin;
             pp.lengthMax       = st.payoutLengthMax;
-            const int deserved =
-                payout::Deserved(g_defStars.load(), g_defMood.load(),
-                                 g_defDiff.load(), g_defRank.load(),
-                                 g_defAtInn.load(), g_defSongSec.load(), pp);
+            pp.audiencePayLone = st.audiencePayLone;
+            pp.audienceFullAt  = st.audienceFullAt;
+            // A negative count means counting was disabled: pay the full
+            // room rather than inventing an empty one.
+            const double aud =
+                g_defAudience.load() < 0.0
+                    ? static_cast<double>(pp.audienceFullAt)
+                    : g_defAudience.load();
+            const int deserved = payout::Deserved(
+                g_defStars.load(), g_defMood.load(), g_defDiff.load(),
+                g_defRank.load(), g_defAtInn.load(), g_defSongSec.load(),
+                aud, pp);
             topUp = payout::TopUp(deserved, captured + delta);
             // diff belongs HERE and not only in the [goldscale] line above:
             // that line prints only when captured > 0, which is never on
@@ -247,9 +259,9 @@ namespace SH {
             // reconstructed from the log.
             spdlog::info(
                 "[payout] stars={} mood={} diff={} rank={} inn={} "
-                "deserved={} observed={} -> topUp={}",
+                "audience={:.2f} deserved={} observed={} -> topUp={}",
                 g_defStars.load(), g_defMood.load(), g_defDiff.load(),
-                g_defRank.load(), g_defAtInn.load(), deserved,
+                g_defRank.load(), g_defAtInn.load(), aud, deserved,
                 captured + delta, topUp);
         } else {
             // Silence here would be indistinguishable from TickDeferred

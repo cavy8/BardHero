@@ -1,0 +1,25 @@
+BardHero third-party notices
+
+BardHero is built with the following third-party components:
+
+- CommonLibSSE-NG, MIT
+- Dear ImGui, MIT
+- fmt, MIT
+- spdlog, MIT
+- SimpleIni, MIT
+- Xbyak, 3-clause BSD
+- miniaudio, public domain or MIT-0
+- stb_vorbis, public domain or MIT
+- signalsmith-stretch, MIT
+- signalsmith-linear, MIT
+- libopus, 3-clause BSD
+- opusfile, 3-clause BSD
+- libogg, 3-clause BSD
+- libopusenc, 3-clause BSD
+
+Full license notices are included in the licenses folder.
+
+The BA Bard Songs compatibility pack contains BardHero-authored charts,
+metadata, and a source manifest. It does not redistribute BA Bard Songs audio,
+plugins, scripts, or game records. Audio caches are created locally from the
+player's separately installed copy.

@@ -59,6 +59,22 @@ namespace SH::WidgetMuffle {
 
         constexpr const char* kSetVisible = "widget.setVisible";
 
+        // CTD 2026-07-28 (trainwreck, field): Invoke(kSetVisible) on the
+        // goldWidget menu crashed inside Scaleform's call setup with a null
+        // environment ([r14+38h], r14=0). GetMenu and uiMovie were both
+        // valid - the movie object outlives its ActionScript state, and the
+        // gold widget is exactly the widget that tears that state down on
+        // its own schedule. So before CALLING into a movie's AS layer,
+        // resolve the "widget" root object with GetVariable: a read that
+        // returns false on a dead or half-initialized VM instead of
+        // faulting (the same probe the shoutWidget "noapi" field run used
+        // safely). A false here falls down the ladder to the movie-level
+        // hide, which never enters the AS VM.
+        [[nodiscard]] bool AsApiAlive(RE::GFxMovieView& a_movie) {
+            RE::GFxValue root;
+            return a_movie.GetVariable(&root, "widget") && root.IsObject();
+        }
+
         void Append(std::string& a_list, const std::string& a_name) {
             a_list += a_list.empty() ? a_name : ", " + a_name;
         }
@@ -105,7 +121,11 @@ namespace SH::WidgetMuffle {
             int         viaApi = 0, viaClip = 0, viaMovie = 0;
             for (const auto& [name, restoreVisible] : a_targets) {
                 auto menu = ui->GetMenu(name);
-                if (!menu || !menu->uiMovie) {
+                // IsMenuOpen: GetMenu answers from the registry, which can
+                // hold a menu whose movie is mid-construction or mid-
+                // teardown; only a menu actually on the stack has a movie
+                // that is safe to touch (goldWidget CTD, 2026-07-28).
+                if (!menu || !menu->uiMovie || !ui->IsMenuOpen(name)) {
                     Append(absent, name);
                     continue;
                 }
@@ -115,7 +135,8 @@ namespace SH::WidgetMuffle {
                 spdlog::info("[muffle] invoke hide {}", name);
                 Mech               mech;
                 const RE::GFxValue off{ false };
-                if (movie.Invoke(kSetVisible, nullptr, &off, 1)) {
+                if (AsApiAlive(movie) &&
+                    movie.Invoke(kSetVisible, nullptr, &off, 1)) {
                     mech = Mech::kAsApi;
                     ++viaApi;
                 } else if (const auto clip =
@@ -157,11 +178,16 @@ namespace SH::WidgetMuffle {
             int movieReshown = 0;
             for (const auto& h : g_hidden) {
                 auto menu = ui->GetMenu(h.name);
-                if (!menu || !menu->uiMovie) { continue; }
+                if (!menu || !menu->uiMovie || !ui->IsMenuOpen(h.name)) {
+                    continue;
+                }
                 auto& movie = *menu->uiMovie;
                 spdlog::info("[muffle] invoke rehide {}", h.name);
                 switch (h.mech) {
                 case Mech::kAsApi: {
+                    // A dead AS layer here means the widget re-initialized
+                    // from its own config; skipping is the correct state.
+                    if (!AsApiAlive(movie)) { break; }
                     const RE::GFxValue off{ false };
                     movie.Invoke(kSetVisible, nullptr, &off, 1);
                     break;
@@ -197,11 +223,20 @@ namespace SH::WidgetMuffle {
             std::size_t restored = 0;
             for (const auto& h : g_hidden) {
                 auto menu = ui->GetMenu(h.name);
-                if (!menu || !menu->uiMovie) { continue; }
+                if (!menu || !menu->uiMovie || !ui->IsMenuOpen(h.name)) {
+                    continue;
+                }
                 auto& movie = *menu->uiMovie;
                 spdlog::info("[muffle] invoke restore {}", h.name);
                 switch (h.mech) {
                 case Mech::kAsApi: {
+                    // A dead AS layer means this instance's hide died with
+                    // it; the next instance loads its own config, which IS
+                    // the restore target. Skip, count it restored.
+                    if (!AsApiAlive(movie)) {
+                        ++restored;
+                        break;
+                    }
                     const RE::GFxValue vis{ h.restoreVisible };
                     if (movie.Invoke(kSetVisible, nullptr, &vis, 1)) {
                         ++restored;

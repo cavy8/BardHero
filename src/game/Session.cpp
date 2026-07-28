@@ -117,6 +117,10 @@ namespace SH {
             // would silently drop every pre-song sample.
             double nextMoodFeed = -1e9;
             double nextMoodSync = -1e9;
+            // audience headcount cadence (payout). Far negative like the
+            // mood feed: the lead-in belongs to the average too - the
+            // patrons present while you tune up are the ones you play to.
+            double nextAudienceScan = -1e9;
             bool audienceCommentsReleased = false;
             // song time of the last mood feed, so the payout tally can
             // attribute a real interval to the level the crowd held over it.
@@ -214,6 +218,15 @@ namespace SH {
         // (_Talent_PlayInstrument.psc:389-421 -
         // GetCurrentLocation().HasKeyword(LocTypeInn)).
         std::atomic<bool>          g_playerAtInn{ false };
+        // Audience for the payout (nobody around, nobody pays - field
+        // 2026-07-28). Sum/samples accumulate ~2s game-thread scans; the
+        // session end divides them into a time-weighted average listener
+        // count. The generation stamp rejects a scan task posted by a
+        // previous session that lands after this one reset the counters -
+        // the same staleness problem g_sgtGen exists for.
+        std::atomic<double>        g_audienceSum{ 0.0 };
+        std::atomic<int>           g_audienceSamples{ 0 };
+        std::atomic<std::uint32_t> g_audienceGen{ 0 };
         // whole-song SGT keeper (plan 2026-07-19). Logic is session-thread
         // only; the atomic carries the keeper pass' observation back.
         sgtperform::Logic g_sgtLogic{ sgtperform::Config{} };
@@ -340,6 +353,12 @@ namespace SH {
         // from any thread need no synchronization.
         RE::BGSKeyword*       g_locTypeInn     = nullptr;
         constexpr const char* kLocTypeInnEdid  = "LocTypeInn";
+        // People pay; wildlife, draugr and the player's own conjured band
+        // do not. Skeleton and undead races carry ActorTypeUndead, not
+        // ActorTypeNPC, so this one keyword excludes the band without any
+        // BandStage coupling.
+        RE::BGSKeyword*       g_actorTypeNpc    = nullptr;
+        constexpr const char* kActorTypeNpcEdid = "ActorTypeNPC";
 
         bool AnySpell() {
             for (const auto& spell : g_performSpell) {
@@ -463,10 +482,20 @@ namespace SH {
             for (auto* k : dh->GetFormArray<RE::BGSKeyword>()) {
                 if (!k) { continue; }
                 const char* edid = k->GetFormEditorID();
-                if (edid && std::strcmp(edid, kLocTypeInnEdid) == 0) {
+                if (!edid) { continue; }
+                if (!g_locTypeInn &&
+                    std::strcmp(edid, kLocTypeInnEdid) == 0) {
                     g_locTypeInn = k;
-                    break;
+                } else if (!g_actorTypeNpc &&
+                           std::strcmp(edid, kActorTypeNpcEdid) == 0) {
+                    g_actorTypeNpc = k;
                 }
+                if (g_locTypeInn && g_actorTypeNpc) { break; }
+            }
+            if (!g_actorTypeNpc) {
+                spdlog::warn(
+                    "[payout] {} not found - audience counting will treat "
+                    "every actor as a listener", kActorTypeNpcEdid);
             }
             if (g_locTypeInn) {
                 spdlog::info("[payout] {} = 0x{:08X}", kLocTypeInnEdid,
@@ -522,6 +551,57 @@ namespace SH {
                 Ducking::GetSingleton().Apply(st.duckCurrentMusic,
                                               st.duckAmbience);
             });
+        }
+
+        // One audience headcount, on the game thread. Counts living people
+        // (ActorTypeNPC via the RACE - actor-level HasKeyword misses race
+        // keywords) within the configured radius, excluding the player and
+        // anything the player commands: the conjured band is the player's
+        // own summon, and a bard cannot be their own paying audience. The
+        // generation stamp drops tasks that outlive their session.
+        void SampleAudienceOnGameThread(std::uint32_t a_gen) {
+            if (a_gen != g_audienceGen.load()) { return; }
+            const double radius = Settings::GetSingleton().audienceRadius;
+            if (radius <= 0.0) { return; }  // counting disabled
+            auto* pc    = RE::PlayerCharacter::GetSingleton();
+            auto* procs = RE::ProcessLists::GetSingleton();
+            if (!pc || !procs) { return; }
+            const auto  ppos = pc->GetPosition();
+            const float r2   = static_cast<float>(radius * radius);
+            int         n    = 0;
+            for (auto& handle : procs->highActorHandles) {
+                auto actor = handle.get();
+                auto* a    = actor.get();
+                if (!a || a == pc) { continue; }
+                if (a->IsDead() || a->IsDisabled()) { continue; }
+                if (a->IsCommandedActor()) { continue; }
+                if (g_actorTypeNpc) {
+                    const auto* race = a->GetRace();
+                    if (!race || !race->HasKeyword(g_actorTypeNpc)) {
+                        continue;
+                    }
+                }
+                if (ppos.GetSquaredDistance(a->GetPosition()) <= r2) {
+                    ++n;
+                }
+            }
+            g_audienceSum.fetch_add(static_cast<double>(n));
+            g_audienceSamples.fetch_add(1);
+        }
+
+        // Session thread: the time-averaged listener count, or -1 when
+        // counting is disabled or never produced a sample (a song shorter
+        // than one scan interval). -1 tells the payout "unknown", which
+        // pays the full room - the MoodTally cold-start rule, applied to
+        // people instead of mood: absence of evidence must never read as
+        // an empty room.
+        [[nodiscard]] double AvgAudienceOrUnknown() {
+            if (Settings::GetSingleton().audienceRadius <= 0.0) {
+                return -1.0;
+            }
+            const int samples = g_audienceSamples.load();
+            if (samples <= 0) { return -1.0; }
+            return g_audienceSum.load() / samples;
         }
         void PostRestoreDucking() {
             SKSE::GetTaskInterface()->AddTask(
@@ -2362,11 +2442,20 @@ namespace SH {
                 pp.lengthRefSec    = se.payoutLengthRefSec;
                 pp.lengthMin       = se.payoutLengthMin;
                 pp.lengthMax       = se.payoutLengthMax;
+                pp.audiencePayLone = se.audiencePayLone;
+                pp.audienceFullAt  = se.audienceFullAt;
                 const int mood = g_moodTally.Dominant();
                 const int rank = SgtProgression::RankFromExpertise(
                     SgtProgression::UiSampled(a_inst));
+                // -1 = counting disabled or no sample ever landed: pay the
+                // full room rather than inventing an empty one.
+                const double avgAud = AvgAudienceOrUnknown();
+                const double aud =
+                    avgAud < 0.0 ? static_cast<double>(pp.audienceFullAt)
+                                 : avgAud;
                 r.gold = payout::Deserved(a_stars, mood, a_difficulty, rank,
-                                          g_playerAtInn.load(), a_songLen, pp);
+                                          g_playerAtInn.load(), a_songLen,
+                                          aud, pp);
                 results::GoldFacts gf;
                 gf.gold       = r.gold;
                 gf.stars      = a_stars;
@@ -2374,8 +2463,12 @@ namespace SH {
                 gf.moodLevel  = mood;
                 gf.lengthMult = payout::LengthMult(a_songLen, pp);
                 gf.atInn      = g_playerAtInn.load();
+                gf.audienceMult = payout::AudienceMult(aud, pp);
                 r.goldReason  = results::GoldReason(gf);
                 r.goldKnown   = true;
+                spdlog::info(
+                    "[payout] audience avg={:.2f} (samples={}) -> mult={:.2f}",
+                    aud, g_audienceSamples.load(), gf.audienceMult);
             }
 
             // ---- the standing ------------------------------------------
@@ -2682,7 +2775,8 @@ namespace SH {
                         g_s->difficulty, earned, g_moodTally.Dominant(),
                         SgtProgression::RankFromExpertise(
                             SgtProgression::UiSampled(inst)),
-                        g_playerAtInn.load(), songLen);
+                        g_playerAtInn.load(), songLen,
+                        AvgAudienceOrUnknown());
                 } else {
                     GoldScale::OnSessionEnd(
                         completed, es.notesHit,
@@ -3252,6 +3346,12 @@ namespace SH {
                 SgtVm::ReleaseAudienceCelebration();
             });
             g_moodTally = payout::MoodTally{};  // ...and so is what it paid
+            // ...and so is who was listening. The bump invalidates any scan
+            // task a previous session posted but the game thread has not
+            // run yet - it would otherwise land in THIS session's counters.
+            g_audienceGen.fetch_add(1);
+            g_audienceSum.store(0.0);
+            g_audienceSamples.store(0);
             // ...and neither is its voice. The crowd owns its own audio
             // device and bank; Prepare opens them on the FIRST session only
             // and returns immediately after that. It sits here, at the end
@@ -3454,6 +3554,7 @@ namespace SH {
             g_s->nextGapLog    = 0.0;
             g_s->nextMoodFeed  = -1e9;
             g_s->nextMoodSync  = -1e9;
+            g_s->nextAudienceScan = -1e9;
             g_s->lastMoodFeed  = -1e9;
             g_s->prevFrames    = 0;
             g_s->maxAbsDelta   = 0.0;
@@ -3747,6 +3848,17 @@ namespace SH {
             // keeping the engine-feed lock, also used by InputHook, off this
             // ~200Hz session tick.
             const auto& st = Settings::GetSingleton();
+            // Audience headcount every 2s, posted to the game thread. The
+            // payout wants a time-weighted average over the whole song, not
+            // a final-note headcount - someone who walks off mid-set stops
+            // counting from that point (payout::AudienceMult).
+            if (t >= g_s->nextAudienceScan) {
+                g_s->nextAudienceScan = t + 2.0;
+                const auto gen = g_audienceGen.load();
+                SKSE::GetTaskInterface()->AddTask(
+                    [gen] { SampleAudienceOnGameThread(gen); });
+            }
+
             // ONE 10Hz sampler serves the authoritative Glory/failure model
             // and both optional crowd integrations. It always runs because
             // the HUD and deterministic failure gate are gameplay state;

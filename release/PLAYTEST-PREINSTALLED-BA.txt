@@ -1,0 +1,22 @@
+BardHero 0.2.0 PREINSTALLED BA CHART TEST
+
+This package contains all 87 BA Bard Songs charts as ready-to-scan managed
+song folders. It omits the BA template directory, so BardHero performs no
+BA chart materialization pass when the Songbook opens.
+
+BA Bard Songs 1.3 is still required. No BA audio is redistributed. When a
+song is selected for the first time, BardHero converts only that track from
+the separately installed BA copy into a local cache.
+
+IMPORTANT CLEAN INSTALL
+
+1. Disable or remove every previous BardHero playtest package.
+2. Remove or temporarily rename old SKSE/Plugins/BardHero/songs output,
+   including BardHero song folders captured by Mod Organizer 2's Overwrite.
+3. Install this ZIP as a new mod and enable it.
+4. Confirm BA Bard Songs 1.3 is enabled.
+5. Load a save and open the Songbook.
+
+The Songbook should list songs without first generating chart folders. If it
+crashes, preserve BardHero.log, BardHero.prev.log, and the newest crash report
+before launching Skyrim again.

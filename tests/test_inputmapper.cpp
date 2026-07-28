@@ -268,6 +268,37 @@ static void TestEngageDiffPress() {
     CHECK(f.out[0].value == 1);
 }
 
+static void TestRebuildForgetsEngineState() {
+    // THE PRACTICE-LOOP WRAP (field 2026-07-28). A fret held across a
+    // SeekTo: the engine is rebuilt with a zero fret mask, but the mapper
+    // remembers telling the OLD engine, so a plain engage diff emits
+    // nothing and the note refuses to register until a physical lift and
+    // re-press. ForgetEngineState models the rebuild; the diff must then
+    // re-emit exactly the held frets.
+    Fix f;
+    f.Seed();
+    f.buf[0] = Ev(0x03, true, kT0, 1);
+    f.Feed();  // engaged press - engine and mapper agree fret2 is down
+    f.out.clear();
+    f.m.EmitEngageDiff(kQ0 + 0.1, f.b, f.out);
+    CHECK(f.out.empty());  // in sync: nothing to say
+    f.m.ForgetEngineState();
+    f.m.EmitEngageDiff(kQ0 + 0.2, f.b, f.out);
+    CHECK(f.out.size() == 1);  // ...but a rebuilt engine must be re-told
+    CHECK(f.out[0].action == InputAction::kFret2);
+    CHECK(f.out[0].value == 1);
+    f.out.clear();
+    f.m.EmitEngageDiff(kQ0 + 0.3, f.b, f.out);  // idempotent once synced
+    CHECK(f.out.empty());
+    // nothing held -> a rebuild has nothing to re-emit
+    f.buf[0] = Ev(0x03, false, kT0 + 100, 2);
+    f.Feed(kT0 + 100, kQ0 + 0.4);
+    f.out.clear();
+    f.m.ForgetEngineState();
+    f.m.EmitEngageDiff(kQ0 + 0.5, f.b, f.out);
+    CHECK(f.out.empty());
+}
+
 static void TestWhammyRefire() {
     Fix f;
     f.b.whammy = 0x2C;  // bind Z
@@ -743,6 +774,7 @@ static void RunTests() {
     TestSequenceGapsAreNotLoss();
     TestEngageDiffRelease();
     TestEngageDiffPress();
+    TestRebuildForgetsEngineState();
     TestWhammyRefire();
     TestResetReseeds();
     TestIsBound();

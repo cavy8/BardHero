@@ -557,6 +557,29 @@ static void RunTests() {
         CHECK(!Has(r, "room"));
     }
     {
+        // Nobody around outranks every other zero-purse cause: a mood level
+        // computed with no listeners is the model talking to itself, and
+        // "lost the room" must never blame a room that never existed
+        // (field 2026-07-28).
+        GoldFacts nobody;
+        nobody.gold = 0; nobody.stars = 5; nobody.moodLevel = 0;
+        nobody.audienceMult = 0.0;
+        const std::string r = GoldReason(nobody);
+        CHECK(Has(r, "nobody was around"));
+        CHECK(!Has(r, "lost the room"));
+        CHECK(Has(CompactGoldReason(r), "Nobody"));
+
+        // a thin crowd is named on a PAID purse...
+        GoldFacts sparse;
+        sparse.gold = 5; sparse.stars = 4; sparse.moodLevel = 2;
+        sparse.audienceMult = 0.4;
+        CHECK(Has(GoldReason(sparse), "handful of listeners"));
+        // ...and a full room stays silent about itself
+        GoldFacts full;
+        full.gold = 30; full.stars = 5; full.moodLevel = 2;
+        CHECK(!Has(GoldReason(full), "handful"));
+    }
+    {
         // A middling length says nothing about length at all - the clause
         // exists to explain a swing, and 1.0x is not one.
         GoldFacts mid;

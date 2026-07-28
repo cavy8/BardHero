@@ -229,6 +229,17 @@ Write-LicenseTail `
     -Marker "This software is available under 2 licenses" `
     -Destination (Join-Path $licenseRoot "stb_vorbis.txt")
 
+# signalsmith-stretch and its signalsmith-linear dependency cannot go through
+# Write-LicenseTail: the vendored headers are code only, with no inline
+# copyright or licence text to extract. The MIT notice is kept as a static
+# file instead and copied verbatim.
+$signalsmithLicense = Join-Path $repoRoot "release\licenses\signalsmith.txt"
+if (-not (Test-Path -LiteralPath $signalsmithLicense)) {
+    throw "Missing license notice: $signalsmithLicense"
+}
+Copy-Item -LiteralPath $signalsmithLicense `
+    -Destination (Join-Path $licenseRoot "signalsmith.txt")
+
 $dllHash = (Get-FileHash -LiteralPath (Join-Path $pluginRoot "BardHero.dll") `
     -Algorithm SHA256).Hash
 $versionLines = @(

@@ -1,0 +1,22 @@
+BardHero 0.2.0 NO-BA QUICK TEST
+
+This diagnostic package omits the complete BA Bard Songs compatibility pack.
+BardHero therefore performs no BA template or source scan. The ordinary
+Songbook still supports separately installed custom songs.
+
+IMPORTANT CLEAN INSTALL
+
+1. Disable or remove the previous BardHero playtest package.
+2. Install this ZIP as a new mod and enable it.
+3. Remove or temporarily rename any old generated folder at:
+   SKSE/Plugins/BardHero/songs
+
+Mod Organizer 2 may have placed that folder in Overwrite. Keeping it would
+make BardHero scan the previously generated BA entries as ordinary songs,
+which defeats this diagnostic test.
+
+Open the Songbook after loading a save. With no custom songs installed, it
+should show the normal empty state and allow cancellation.
+
+If Skyrim still crashes, preserve BardHero.log, BardHero.prev.log, and the
+newest crash report before launching again.

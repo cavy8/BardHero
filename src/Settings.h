@@ -390,6 +390,14 @@ namespace SH {
         double payoutLengthRefSec    = 120.0;
         double payoutLengthMin       = 0.5;
         double payoutLengthMax       = 2.0;
+        // Nobody around, nobody pays (field 2026-07-28: gold for a flawless
+        // set on an empty mountainside). Listeners are sampled during the
+        // song within this radius of the player; the purse scales on the
+        // time-weighted average. A non-positive radius disables counting,
+        // which pays as a full room (the pre-audience behaviour).
+        double audienceRadius  = 1200.0;  // game units, ~17 m
+        double audiencePayLone = 0.40;    // purse share for one listener
+        int    audienceFullAt  = 4;       // listeners for the whole purse
         // STANDALONE PERFORM (architecture change 2026-07-20). SGT's
         // _Talent_PlayInstrument OnEffectStart is one long serial coroutine
         // of Papyrus latents that seizes controls, equipment, camera and

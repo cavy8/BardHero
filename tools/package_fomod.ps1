@@ -21,7 +21,8 @@
 
 param(
     [string]$PackageVersion = "0.2.0",
-    [string]$ElectricRoot = "C:\Studios\Mod Studio\BardHero Electric\dist"
+    [string]$ElectricRoot = "C:\Studios\Mod Studio\BardHero Electric\dist",
+    [string]$AttributionDoc = "C:\Studios\Mod Studio\BardHero Electric\docs\ATTRIBUTION.md"
 )
 
 $ErrorActionPreference = "Stop"
@@ -63,6 +64,25 @@ $flatLicenses = Join-Path $flatRoot "licenses"
 if (Test-Path -LiteralPath $flatLicenses) {
     Copy-Item -LiteralPath $flatLicenses -Destination $stageRoot -Recurse
 }
+
+# WHY THIS IS A HARD REQUIREMENT AND NOT A COURTESY. The three Doom Lute
+# models (Gibson SG Guitar, Marceline's bass, Guitar) are all CC BY 4.0, and
+# each entry states that attribution must remain with every redistribution of
+# the converted asset. This archive ships those meshes and textures, so an
+# archive without this file is out of licence compliance, not merely untidy.
+# The Mixamo animation analysis and the Freesound/Pixabay sound entries ride
+# along in the same document.
+#
+# Sourced from the Electric repo rather than vendored into this one: that repo
+# is the home of the art, so a copy here would drift the moment a new asset is
+# added. Missing file is fatal on purpose - a silent skip is how the 1.0
+# archive shipped without it the first time.
+if (-not (Test-Path -LiteralPath $AttributionDoc)) {
+    throw ("Attribution document missing: $AttributionDoc`n" +
+        "The Doom Lute models are CC BY 4.0 and cannot ship without it.")
+}
+Copy-Item -LiteralPath $AttributionDoc `
+    -Destination (Join-Path $stageRoot "ATTRIBUTION.txt")
 
 # ---- 3. optional: the Doom Lute -----------------------------------------
 # The ONE component that adds a plugin. Sourced from the Electric repo, which

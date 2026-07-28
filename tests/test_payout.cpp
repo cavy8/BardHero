@@ -1,6 +1,8 @@
 #include "harness.h"
 #include "game/PayoutMath.h"
 
+#include <limits>
+
 using namespace SH::payout;
 
 static void RunTests() {
@@ -170,6 +172,44 @@ static void RunTests() {
     // the cap still bounds a long song at max settings
     Params bigLen = p; bigLen.buskBase = 1000.0;
     CHECK(Deserved(5, kGreat, 3, 5, true, 600.0, bigLen) == bigLen.cap);
+
+    // --- nobody around, nobody pays (field 2026-07-28) ------------------
+    // an empty mountainside pays zero for a flawless set - THE bug
+    CHECK(Deserved(5, kGreat, 3, 5, true, 120.0, 0.0, p) == 0);
+    // a full room pays exactly the pre-audience figure, which is also the
+    // no-count fallback callers use: fullAt as audience == the old purse
+    CHECK(Deserved(5, kGreat, 3, 5, true, 120.0,
+                   static_cast<double>(p.audienceFullAt), p) ==
+          Deserved(5, kGreat, 3, 5, true, 120.0, p));
+    // more than a full room never pays more than one
+    CHECK(Deserved(5, kGreat, 3, 5, true, 120.0, 25.0, p) ==
+          Deserved(5, kGreat, 3, 5, true, 120.0, p));
+    // one listener is the busking fantasy, not 1/fullAt of a crowd:
+    // it pays the lone share (30 * 0.40 = 12)
+    CHECK(Deserved(5, kGreat, 3, 5, true, 120.0, 1.0, p) == 12);
+    // the factor is linear between lone and full, and monotonic
+    CHECK(AudienceMult(1.0, p) == 0.40);
+    CHECK(AudienceMult(2.5, p) == 0.70);   // 0.4 + 0.6 * 1.5/3
+    CHECK(AudienceMult(4.0, p) == 1.0);
+    CHECK(AudienceMult(2.0, p) > AudienceMult(1.0, p));
+    CHECK(AudienceMult(3.0, p) > AudienceMult(2.0, p));
+    // below one listener scales the lone share - present for 40% of the
+    // song is 40% of a lone patron, and never rounds up to a purse
+    CHECK(AudienceMult(0.5, p) == 0.20);
+    CHECK(Deserved(5, kGreat, 3, 5, true, 120.0, 0.01, p) == 0);
+    // garbage counts pay nothing rather than everything
+    CHECK(AudienceMult(-3.0, p) == 0.0);
+    CHECK(AudienceMult(std::numeric_limits<double>::quiet_NaN(), p) == 0.0);
+    // a degenerate fullAt of 1 (or below, clamped to 1) still ramps 0..1
+    // and pays whole from the first listener on
+    Params solo = p; solo.audienceFullAt = 1;
+    CHECK(AudienceMult(1.0, solo) == 1.0);
+    CHECK(AudienceMult(0.5, solo) == 0.5);
+    Params degenerate = p; degenerate.audienceFullAt = -2;
+    CHECK(AudienceMult(1.0, degenerate) == 1.0);
+    // audience scales the purse, it cannot create one
+    CHECK(Deserved(5, kTerrible, 3, 5, true, 120.0, 25.0, p) == 0);
+    CHECK(Deserved(0, kGreat, 3, 5, true, 120.0, 25.0, p) == 0);
 
     // --- top-up is a shortfall, never a second payment, never negative ---
     CHECK(TopUp(30, 0) == 30);    // SGT paid nothing (rank 1-3)

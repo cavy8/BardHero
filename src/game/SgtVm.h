@@ -153,6 +153,19 @@ namespace SH::SgtVm {
     // SGT records.
     void SetGuitarAnimObjectOverride(bool a_enabled);
 
+    // Game thread. Re-point the shared AnimObjectLute record at whatever
+    // the CURRENT session's baseline is: the guitar mesh while the guitar
+    // override is armed, the saved original after it, or the vanilla lute
+    // path when nothing was ever saved. The band's per-member model swaps
+    // (BandStage) leave the record aimed at the LAST member's instrument -
+    // bass, when no rhythm stem exists and the rhythm guitarist never
+    // starts - and any graph that captures it afterwards (the player's on
+    // a pose refresh, the next session, a vanilla tavern bard) wears that
+    // instrument (field 2026-07-28: "sometimes we get the wrong guitar,
+    // or even a bass"). BandStage calls this one capture-interval after
+    // each of its swaps and again at teardown.
+    void ReassertAnimObjectBaseline();
+
     // Game thread, kDataLoaded AND post-load/new-game. The electric
     // perform global lives in saves: a save written mid-electric-perform
     // carries 1.0, which would leak the electric body clip into lute

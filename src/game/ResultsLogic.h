@@ -149,16 +149,23 @@ namespace SH::results {
         int    moodLevel  = 1;    // crowd::Level: 0 terrible/1 middling/2 great
         double lengthMult = 1.0;  // payout::LengthMult
         bool   atInn      = true;
+        double audienceMult = 1.0;  // payout::AudienceMult
     };
 
     [[nodiscard]] inline std::string GoldReason(const GoldFacts& f) {
         const int s = std::clamp(f.stars, 0, 5);
         const int m = std::clamp(f.minStars, 1, 5);
 
-        // A zero purse has exactly two causes and the player deserves to
-        // know WHICH - "you were not good enough" and "the room hated it"
-        // call for completely different next attempts.
+        // A zero purse has exactly three causes and the player deserves to
+        // know WHICH - "nobody heard it", "you were not good enough" and
+        // "the room hated it" call for completely different next attempts.
+        // The empty room is tested FIRST: with no listeners the mood level
+        // is the model talking to itself, and "you lost the room" would
+        // blame the player for a room that never existed.
         if (f.gold <= 0) {
+            if (f.audienceMult <= 0.0) {
+                return "No gold - nobody was around to hear it.";
+            }
             if (f.moodLevel <= 0) {
                 return "No gold - you lost the room before the end.";
             }
@@ -204,6 +211,11 @@ namespace SH::results {
         } else {
             add("to a polite room");
         }
+        // a thin crowd that shrank the purse is worth naming; a full one is
+        // the expected case and stays silent like a 1.0 length multiplier
+        if (f.audienceMult > 0.0 && f.audienceMult <= 0.5) {
+            add("for a handful of listeners");
+        }
         out += ".";
         return out;
     }
@@ -216,6 +228,9 @@ namespace SH::results {
         const auto has = [&reason](const char* text) {
             return reason.find(text) != std::string::npos;
         };
+        if (has("nobody was around")) {
+            return "Nobody was around to hear it.";
+        }
         if (has("lost the room")) {
             return "The room was lost before the end.";
         }

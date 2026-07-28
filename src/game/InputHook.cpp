@@ -125,6 +125,21 @@ namespace SH {
         std::uint64_t g_botGeneration = 0;
         bool g_wasActive  = false;          // mapper-reset edge
         bool g_wasFeeding = false;          // engage-diff edge
+        // Last clockGeneration the MAPPERS were reconciled against. The
+        // bot is not the only per-run state on this side of the boundary:
+        // a practice-loop SeekTo rebuilds the engine (fret mask zero)
+        // inside one session-thread pass, and whether this hook ever SEES
+        // feed.engaged go false across that gap is a race it usually
+        // loses - the whole seek takes well under a second. Lose it and no
+        // engage edge fires; win it and the engage diff still emits
+        // nothing, because the mapper diffs against what it told the OLD
+        // engine. Either way a fret held across the wrap is dead until
+        // physically lifted and re-pressed, with the strike-line pad lit
+        // over notes that refuse to register (field 2026-07-28: "you have
+        // to lift your finger off the note for it to register", "the red
+        // pad color got stuck"). The generation edge catches both: forget
+        // the engine state, then diff.
+        std::uint64_t g_mapperGeneration = 0;
         long g_prevMissish = 0;  // notesMissed + overstrums at last frame
         int  g_prevHits    = 0;
 
@@ -368,7 +383,23 @@ namespace SH {
                         feeding, g_gamepadMode, g_events);
                 }
             }
-            if (feeding && !g_wasFeeding) {
+            const std::uint64_t mapperGen =
+                feed.clockGeneration.load(std::memory_order_relaxed);
+            const bool engineRebuilt = mapperGen != g_mapperGeneration;
+            g_mapperGeneration = mapperGen;
+            if (engineRebuilt) {
+                // A rebuilt engine has been told nothing, whatever the
+                // mappers remember telling the old one (see the comment at
+                // g_mapperGeneration). Forget unconditionally - if the
+                // session is not feeding right now, the next engage edge
+                // performs the same diff and re-emits then.
+                g_mapper.ForgetEngineState();
+                g_keyboardSpFallback.ForgetEngineState();
+                if (g_controllerEnabled) {
+                    g_padMapper.ForgetEngineState();
+                }
+            }
+            if (feeding && (!g_wasFeeding || engineRebuilt)) {
                 // resume reconciliation - after Feed, so the diff (stamped
                 // now) follows this frame's real events monotonically
                 g_mapper.EmitEngageDiff(qpcNow, g_binds, g_events);
@@ -377,6 +408,12 @@ namespace SH {
                 if (g_controllerEnabled) {
                     g_padMapper.EmitEngageDiff(qpcNow, g_padBinds,
                                                g_events);
+                }
+                if (engineRebuilt) {
+                    spdlog::info(
+                        "[input] mapper reconciled for clock generation {} "
+                        "(held frets 0x{:02X})",
+                        mapperGen, g_mapper.HeldFretMask());
                 }
             }
             if (g_controllerEnabled) {

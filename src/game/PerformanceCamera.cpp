@@ -21,6 +21,7 @@
 #define SMOOTHCAM_API_COMMONLIB
 #include "SmoothCamAPI.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -67,7 +68,33 @@ namespace SH::PerformanceCamera {
         // camera, and a director that does not hand the view back is exactly
         // the defect the spike harness shipped with on 2026-07-26.
         float g_origYaw = 0.0f, g_origPitch = 0.0f, g_origZoom = 0.0f;
+        float g_origPitchZoom = 0.0f;
         float g_origFov = 0.0f;
+        // The ACTOR's look pitch, sampled ONCE at engage and used as a
+        // constant compensation term for the whole session.
+        //
+        // Three failed shapes bound this design (field 2026-07-28, four
+        // reports in one evening):
+        //  - compensating freeRotation with a PER-FRAME read of
+        //    data.angle.x fixed look-up entries but left look-down
+        //    entries overhead (pitchZoomOffset, the engine's own
+        //    pitch-derived hoist, was still live);
+        //  - zeroing pitchZoomOffset too still opened inconsistently
+        //    between the extremes;
+        //  - LEVELLING the actor (writing data.angle.x = 0 at engage) was
+        //    far worse: in third person the engine re-derives actor pitch
+        //    and camera rotation from each other, so a raw actor write
+        //    plus a per-frame re-read of the same field closed a feedback
+        //    loop - camera spinning, parked at the player's feet looking
+        //    up.
+        // So: never write the actor, and never re-read mid-session what
+        // the engine may be re-deriving from our own writes. One sample
+        // at engage, constant thereafter. The actor pitch does not move
+        // during a directed session on its own - freeRotationEnabled
+        // routes mouse look into freeRotation, which the director
+        // overwrites every frame - so a constant equals the per-frame
+        // read everywhere except inside the feedback loop.
+        float g_entryActorPitch = 0.0f;
         bool  g_origFree = false;
         bool  g_haveOrig = false;
 
@@ -165,8 +192,18 @@ namespace SH::PerformanceCamera {
             g_origYaw   = a_st->freeRotation.x;
             g_origPitch = a_st->freeRotation.y;
             g_origZoom  = a_st->targetZoomOffset;
+            g_origPitchZoom = a_st->pitchZoomOffset;
             g_origFree  = a_st->freeRotationEnabled;
             g_origFov   = a_cam ? a_cam->worldFOV : 0.0f;
+            // One read, never a write (see g_entryActorPitch).
+            if (auto* pc = RE::PlayerCharacter::GetSingleton()) {
+                g_entryActorPitch = pc->data.angle.x;
+                spdlog::info(
+                    "[camdir] entry actor pitch {:.3f} - compensating as "
+                    "a constant this session", g_entryActorPitch);
+            } else {
+                g_entryActorPitch = 0.0f;
+            }
             g_haveOrig  = true;
         }
 
@@ -176,6 +213,7 @@ namespace SH::PerformanceCamera {
             a_st->freeRotation.x      = g_origYaw;
             a_st->freeRotation.y      = g_origPitch;
             a_st->targetZoomOffset    = g_origZoom;
+            a_st->pitchZoomOffset     = g_origPitchZoom;
             a_st->freeRotationEnabled = g_origFree;
             if (a_cam && g_origFov > 0.0f) { a_cam->worldFOV = g_origFov; }
             g_haveOrig = false;
@@ -346,9 +384,39 @@ namespace SH::PerformanceCamera {
 
                 // BEFORE the original: the engine's collision and smoothing
                 // pass runs inside it, so this is what it solves against.
+                //
+                // PITCH IS COMPENSATED, NOT COPIED. Shot::pitchDeg is the
+                // shot's intent in the world ("positive looks down" at the
+                // stage), but freeRotation.y is an OFFSET the engine adds on
+                // top of the player's own look pitch. Enter the session
+                // looking level and the two agree; enter looking up and
+                // every shot tilts up by that amount for the whole song -
+                // the low shots point up from beneath the performer and
+                // collision pulls the camera into the floor under the body.
+                // The compensation term is g_entryActorPitch, sampled ONCE
+                // at engage: a per-frame re-read of data.angle.x closed a
+                // feedback loop with the engine's own actor/camera
+                // reconciliation and spun the camera (the comment at
+                // g_entryActorPitch has the full failure history). Yaw
+                // needs no such term: Shot::yawDeg is DECLARED relative to
+                // the stage heading, so relative is its correct space.
+                const float actorPitch = g_entryActorPitch;
                 a_this->freeRotationEnabled = true;
                 a_this->freeRotation.x      = out.yawDeg * kDegToRad;
-                a_this->freeRotation.y      = out.pitchDeg * kDegToRad;
+                a_this->freeRotation.y      = std::clamp(
+                    out.pitchDeg * kDegToRad - actorPitch, -1.45f, 1.45f);
+                // The pitch compensation above fixes the VIEW; this fixes
+                // the POSITION. pitchZoomOffset is the engine's own
+                // pitch-derived hoist - it lifts the camera up and over as
+                // the actor looks down (vanilla's look-down-over-the-
+                // shoulder behaviour), computed from the RAW actor pitch,
+                // which the compensation deliberately leaves alone. Enter
+                // the session from a high look-down angle and this term
+                // parks the camera directly overhead regardless of every
+                // field written above (field 2026-07-28, second camera
+                // report). While the director owns the camera, the shot's
+                // elevation comes from freeRotation and distance alone.
+                a_this->pitchZoomOffset     = 0.0f;
                 a_this->targetZoomOffset    = out.distance;
                 // A CUT IS INSTANT, so snap the current zoom too. Writing
                 // only the TARGET leaves the engine easing currentZoomOffset
@@ -414,7 +482,12 @@ namespace SH::PerformanceCamera {
                 // pitch we get back differs from the pitch we wrote, which
                 // is the event actually worth catching.
                 {
-                    const float wantPitch = out.pitchDeg * kDegToRad;
+                    // The same actor-pitch term the write applied: the
+                    // readback must compare against what was WRITTEN, or a
+                    // pitched player reads as a permanent false DRIFTED.
+                    const float wantPitch = std::clamp(
+                        out.pitchDeg * kDegToRad - actorPitch, -1.45f,
+                        1.45f);
                     const float gotPitch  = a_this->freeRotation.y;
                     const bool  drifted =
                         std::fabs(gotPitch - wantPitch) > 0.02f;
@@ -438,12 +511,12 @@ namespace SH::PerformanceCamera {
                         g_lastDiagAt = songSec;
                         spdlog::info(
                             "[camdir] state t={:.1f} pitch want={:.3f} "
-                            "got={:.3f}{} | yaw want={:.3f} got={:.3f} | "
-                            "zoom want={:.2f} cur={:.2f} | fov base={:.1f} "
-                            "want={:.1f} got={:.1f}{} | pitchZoom={:.1f} "
-                            "collValid={} clamped={}",
+                            "got={:.3f}{} actor={:.3f} | yaw want={:.3f} "
+                            "got={:.3f} | zoom want={:.2f} cur={:.2f} | "
+                            "fov base={:.1f} want={:.1f} got={:.1f}{} | "
+                            "pitchZoom={:.1f} collValid={} clamped={}",
                             songSec, wantPitch, gotPitch,
-                            drifted ? " DRIFTED" : "",
+                            drifted ? " DRIFTED" : "", actorPitch,
                             out.yawDeg * kDegToRad, a_this->freeRotation.x,
                             out.distance, a_this->currentZoomOffset,
                             g_origFov, wantFov, gotFov,

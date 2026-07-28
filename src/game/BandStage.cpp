@@ -4,6 +4,7 @@
 #include "game/BandFormationLogic.h"
 #include "game/BandLifecycleLogic.h"
 #include "game/BandPerformanceLogic.h"
+#include "game/SgtVm.h"
 
 #include "RE/B/BGSArtObject.h"
 #include "RE/B/BGSSoundDescriptorForm.h"
@@ -78,6 +79,15 @@ namespace bard::BandStage {
         bool g_anyPulseExecuted = false;
         std::chrono::steady_clock::time_point g_lastPulseExecuted{};
         std::chrono::steady_clock::time_point g_bassStartedAt{};
+        // The shared AnimObjectLute record was re-pointed at a band
+        // member's instrument and the session baseline is due back one
+        // capture interval later. Without the re-assert the record stays
+        // aimed at the LAST member's model - bass, whenever no rhythm stem
+        // exists - and every later capture wears it (field 2026-07-28,
+        // "sometimes we get the wrong guitar, or even a bass"). See
+        // SgtVm::ReassertAnimObjectBaseline.
+        bool g_lutePropDirty = false;
+        std::chrono::steady_clock::time_point g_lutePropDirtyAt{};
 
 
         // ---- THE FALLBACK SOUND PATH, NOT THE PRIMARY ONE ----------------
@@ -355,6 +365,7 @@ namespace bard::BandStage {
         g_arrivalWarmupPulses.fill(0);
         g_headTrackingDisabled.fill(false);
         g_anyPulseExecuted = false;
+        g_lutePropDirty = false;
         g_nextPerformancePulse.store(-1.0, std::memory_order_relaxed);
         g_performancePulse.store(0, std::memory_order_relaxed);
         g_activeMirror.store(true, std::memory_order_release);
@@ -410,6 +421,18 @@ namespace bard::BandStage {
             }
             g_anyPulseExecuted = true;
             g_lastPulseExecuted = now;
+            // A band swap of the shared lute record has had its capture
+            // interval: put the record back on the session baseline so the
+            // NEXT capture - the player's graph on a pose refresh, or
+            // whatever performs after this band - gets the right
+            // instrument. Before the member loop on purpose: a member
+            // swapping this same pulse re-dirties it afterwards.
+            if (g_lutePropDirty &&
+                std::chrono::duration<double>(now - g_lutePropDirtyAt)
+                        .count() >= band::kSharedPropCaptureSeconds) {
+                g_lutePropDirty = false;
+                SH::SgtVm::ReassertAnimObjectBaseline();
+            }
             auto* ghostShader =
                 RE::TESForm::LookupByID<RE::TESEffectShader>(
                     kGhostShaderForm);
@@ -604,11 +627,15 @@ namespace bard::BandStage {
                     if (luteAnimObject
                         && prop == band::PropKind::kBassAnimationObject) {
                         luteAnimObject->SetModel(kBassAnimModel);
+                        g_lutePropDirty   = true;
+                        g_lutePropDirtyAt = now;
                     } else if (
                         luteAnimObject
                         && prop
                             == band::PropKind::kGuitarAnimationObject) {
                         luteAnimObject->SetModel(kGuitarAnimModel);
+                        g_lutePropDirty   = true;
+                        g_lutePropDirtyAt = now;
                     } else if (
                         drinkPotionAnimObject
                         && prop
@@ -660,6 +687,13 @@ namespace bard::BandStage {
             drinkPotionAnimObject->SetModel(
                 kVanillaDrinkPotionAnimModel);
         }
+        // The lute record got the same treatment as the drink potion only
+        // implicitly, via the pulse-top re-assert - which never runs again
+        // after the LAST swap of a run (no rhythm stem: record left on
+        // BASS for every performance after this band, ours or vanilla's).
+        // Teardown restores it unconditionally, exactly like the potion.
+        g_lutePropDirty = false;
+        SH::SgtVm::ReassertAnimObjectBaseline();
         // Dismissal mirrors arrival exactly: the shader on all four, the art
         // object on the bearer alone. This path is where the noise was still
         // audible after the arrival was first fixed - "we also hear the sfx

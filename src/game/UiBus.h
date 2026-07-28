@@ -110,9 +110,13 @@ namespace SH {
         //
         // While set, the hook swallows ONLY the strum binds, and only on the
         // pass-through path. Deliberately NOT Skyrim's own jump binding:
-        // reading that means ControlMap, and CLAUDE.md forbids touching
-        // enabledControls on AE 1.6.1170 because its layout is wrong past
-        // controlMap[].
+        // reading that means ControlMap, whose members past controlMap[]
+        // are shifted on AE - what CommonLibSSE-NG declares as
+        // enabledControls is really contextPriorityStack::_size, and
+        // writing it emptied the input context stack. That was the
+        // 2026-07-22 post-song input lock; the binding table at +0x60 is
+        // the only region of that record proven correct on this runtime.
+        // See docs/evidence/2026-07-22-controlmap-offsets-are-wrong-on-ae.md.
         //
         // A stuck flag here swallows Space forever, which is unrecoverable
         // for the player, so it is cleared on EVERY failure-feedback exit AND

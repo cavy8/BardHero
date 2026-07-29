@@ -93,6 +93,19 @@ namespace SH {
         std::string performSpellDrum  = "SkyrimsGotTalent-Bards.esp|0x0022ED";
         std::string performSpellGuitar =
             "Bard Hero - Doom Lute.esp|000803";
+        // Which instruments open the BardHero songbook. An instrument set
+        // false resolves to FormID 0, which IsPerformSpell can never match,
+        // so the AddTarget hook does nothing and SGT's own OnEffectStart
+        // runs its whole performance: its songs, its clip, its duets.
+        //
+        // These are deliberately SEPARATE from the sPerformSpell* strings
+        // above. Blanking a string works too, and is what players had to do
+        // before 1.2, but it destroys the value - turning the instrument
+        // back on then means knowing what the string used to be.
+        bool handleLute   = true;
+        bool handleFlute  = true;
+        bool handleDrum   = true;
+        bool handleGuitar = true;
         // M3 input binds (spec 7 / 14.2) - DIK scan codes (DirectInput
         // domain: matches both the DI buffer's ofs and the InputEvent
         // idCode), NOT the VK codes the debug keys use. 0 = unbound.
@@ -103,7 +116,11 @@ namespace SH {
         int fret5Key  = 0x06;  // DIK_5
         int strumKey  = 0x39;  // DIK_SPACE (press = strum, CH/YARG keyboard)
         int spKey     = 0x2A;  // DIK_LSHIFT (star power)
-        int whammyKey = 0x00;  // unbound (spec 14 keyboard-whammy OQ)
+        // DIK_SEMICOLON. Was unbound here and bound only in the SECONDARY
+        // bridge column, which the Bindings tab does not edit - so whammy
+        // read as unbound on the page while ';' worked in game (field
+        // 2026-07-29). The primary column owns it now.
+        int whammyKey = 0x27;  // DIK_SEMICOLON
         int pauseKey  = 0x01;  // DIK_ESCAPE (session pause)
         // Secondary binds (field 2026-07-19): a controller-as-keyboard
         // bridge (Wii GH guitar) plays alongside the keyboard - defaults
@@ -117,7 +134,7 @@ namespace SH {
         int strumKey2 = 0xC8;  // DIK_UP (strum bar up)
         int strumKey3 = 0xD0;  // DIK_DOWN (strum bar down)
         int spKey2    = 0x23;  // DIK_H (gh3.PIE: guitar Minus + tilt)
-        int whammyKey2 = 0x27;  // DIK_SEMICOLON
+        int whammyKey2 = 0x00;  // unbound - ';' moved to the primary column
         int pauseKey2  = 0x1C;  // DIK_RETURN (gh3.PIE: guitar Plus) -
                                 // pauses while playing, RESUMES while
                                 // paused (hook-captured toggle)
@@ -127,6 +144,13 @@ namespace SH {
         // layout, with Gamepad Mode auto-strumming fret presses.
         bool controllerEnabled = true;
         bool gamepadMode       = true;
+        // Keyboard fret-only play: a fret press strums by itself, so Space
+        // is not needed. Gamepad Mode above, for the keyboard. Requested by
+        // two players on 2026-07-28 who could not press a fret and Space at
+        // the same time. Space still works when this is on; what changes is
+        // that it stops being required, and that a stray fret press now
+        // costs an overstrum (the same trade Gamepad Mode already makes).
+        bool fretsOnly         = false;
         int  gamepadFret1      = 280;  // LT / L2
         int  gamepadFret2      = 274;  // LB / L1
         int  gamepadFret3      = 275;  // RB / R1
@@ -457,16 +481,37 @@ namespace SH {
         // Duet follower keep-alive - spec 8, default OFF until the log-first
         // field run confirms the re-trigger target.
         bool followerKeepAlive = false;
+        // The conjured skeleton band on guitar songs. On by default; this
+        // exists so it can be turned OFF, because it is the one feature that
+        // puts four new actors into a live scene mid-song and it had no
+        // isolation switch when a render-thread CTD first correlated with it
+        // (2026-07-29). Off means guitar songs play with no ensemble;
+        // nothing else changes.
+        bool enchantedBand = true;
         // Cheats (settings page 2026-07-20). AutoPlay: the input feeder
         // synthesizes perfect chart inputs (progression testing); real
         // fret/strum keys are ignored while on, pause keys stay live.
         bool autoPlay = false;
+        // No Fail (owner ask 2026-07-30): the crowd-patience gate never
+        // ends the song. Rides the SAME rail practice mode already proved -
+        // rules.allowFailure, resolved once at session start - so the
+        // stateful failure gate stays short-circuited, not fed-and-ignored
+        // (a fed gate would stay primed to fail the player moments into
+        // their next un-cheated run). Everything else judges honestly: a
+        // terrible run still ends with terrible stars and no gold, it just
+        // ENDS instead of being cut off.
+        bool noFail = false;
         // Phase 2 native start: strip the perform ability at the AddTarget
         // hook, before Papyrus schedules OnEffectStart. Field-proven
         // 2026-07-20 - SGT's start flow then does not run at all, so no
         // root, no sheathe stall, no idle, no camera swap. OFF falls back
         // to the old settle-then-strip standstill.
         bool sgtNativeStart = true;
+        // Stand down completely when the player has asked a follower to play
+        // together (_Talent_FollowerPlays). SGT builds a duet inside the
+        // OnEffectStart that native start suppresses, so without this the
+        // dialogue option appears and nothing happens. OFF restores 1.1.
+        bool duetPassthrough = true;
         // The instrument is equipped from the inventory, so that menu is
         // still up when the trigger fires - and it HIDES our browser
         // behind it. Close it for the player.

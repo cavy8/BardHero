@@ -218,6 +218,30 @@ int main() {
                   true, true, true, K::kUnavailable, 0) == A::kRetry);
     }
 
+    // ---- duet passthrough decision -----------------------------------
+    // An instrument BardHero does not handle never reaches a passthrough
+    // question: the hook returns on IsPerformSpell long before this.
+    {
+        using SH::performtrigger::TriggerAction;
+        using SH::performtrigger::DecideTrigger;
+
+        CHECK(DecideTrigger(false, false, false) == TriggerAction::kIgnore);
+        CHECK(DecideTrigger(false, true,  true)  == TriggerAction::kIgnore);
+
+        // Handled, nothing pending: BardHero opens the songbook.
+        CHECK(DecideTrigger(true, true,  false) == TriggerAction::kRun);
+        CHECK(DecideTrigger(true, false, false) == TriggerAction::kRun);
+
+        // Handled AND a duet pending: passthrough wins over the takeover.
+        // This is the case both Nexus reports are about.
+        CHECK(DecideTrigger(true, true, true) ==
+              TriggerAction::kStandDownForDuet);
+
+        // Kill switch off restores 1.1 behaviour: we take the equip even
+        // though a duet was asked for.
+        CHECK(DecideTrigger(true, false, true) == TriggerAction::kRun);
+    }
+
     std::puts("all PerformTrigger tests passed");
     return 0;
 }

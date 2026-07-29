@@ -75,6 +75,30 @@ namespace SH::WidgetMuffle {
             return a_movie.GetVariable(&root, "widget") && root.IsObject();
         }
 
+        // Does the clip we are about to write still EXIST? Same preflight
+        // idea as AsApiAlive, for the path that never had one.
+        //
+        // AsApiAlive cannot serve here: it probes for a `widget` object, and
+        // the inner-clip mechanism exists precisely for movies that have no
+        // such object (shoutWidget is a bare timeline). So the inner-clip
+        // writes went out with nothing checked but IsMenuOpen, and an open
+        // menu is not the same claim as a live clip - a widget that rebuilt
+        // its timeline leaves the path resolving to nothing, and SetVariable
+        // then walks a dead object tree inside Scaleform.
+        //
+        // Probe the PARENT, never the leaf: "_root.shoutWidget._visible" is
+        // a property, and a property of a live clip may legitimately be
+        // absent while the clip itself is fine.
+        [[nodiscard]] bool ClipAlive(RE::GFxMovieView& a_movie,
+                                     std::string_view  a_clip) {
+            const auto dot = a_clip.rfind('.');
+            if (dot == std::string_view::npos) { return false; }
+            RE::GFxValue parent;
+            return a_movie.GetVariable(
+                       &parent, std::string{ a_clip.substr(0, dot) }.c_str())
+                   && parent.IsObject();
+        }
+
         void Append(std::string& a_list, const std::string& a_name) {
             a_list += a_list.empty() ? a_name : ", " + a_name;
         }
@@ -141,7 +165,7 @@ namespace SH::WidgetMuffle {
                     ++viaApi;
                 } else if (const auto clip =
                                widget_muffle::InnerClipFor(name);
-                           !clip.empty() &&
+                           !clip.empty() && ClipAlive(movie, clip) &&
                            movie.SetVariable(
                                std::string{ clip }.c_str(),
                                RE::GFxValue{ false })) {
@@ -195,7 +219,7 @@ namespace SH::WidgetMuffle {
                 case Mech::kInnerClip: {
                     const auto clip =
                         widget_muffle::InnerClipFor(h.name);
-                    if (!clip.empty()) {
+                    if (!clip.empty() && ClipAlive(movie, clip)) {
                         movie.SetVariable(
                             std::string{ clip }.c_str(),
                             RE::GFxValue{ false });
@@ -246,8 +270,15 @@ namespace SH::WidgetMuffle {
                 case Mech::kInnerClip: {
                     const auto clip =
                         widget_muffle::InnerClipFor(h.name);
-                    if (!clip.empty() &&
-                        movie.SetVariable(
+                    // A clip that has gone took our hide with it, so the
+                    // widget is already in whatever state its own config
+                    // rebuilt it to. Count it restored; there is nothing
+                    // left of ours to undo.
+                    if (clip.empty() || !ClipAlive(movie, clip)) {
+                        ++restored;
+                        break;
+                    }
+                    if (movie.SetVariable(
                             std::string{ clip }.c_str(),
                             RE::GFxValue{ h.restoreVisible })) {
                         ++restored;

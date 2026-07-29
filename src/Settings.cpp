@@ -100,6 +100,11 @@ namespace SH {
                                         performSpellDrum.c_str());
         performSpellGuitar = ini.GetValue("Session", "sPerformSpellGuitar",
                                           performSpellGuitar.c_str());
+        handleLute   = ini.GetBoolValue("Session", "bHandleLute", handleLute);
+        handleFlute  = ini.GetBoolValue("Session", "bHandleFlute", handleFlute);
+        handleDrum   = ini.GetBoolValue("Session", "bHandleDrum", handleDrum);
+        handleGuitar = ini.GetBoolValue("Session", "bHandleGuitar",
+                                        handleGuitar);
         fret1Key  = static_cast<int>(ini.GetLongValue("Input", "iFret1Key", fret1Key));
         fret2Key  = static_cast<int>(ini.GetLongValue("Input", "iFret2Key", fret2Key));
         fret3Key  = static_cast<int>(ini.GetLongValue("Input", "iFret3Key", fret3Key));
@@ -123,6 +128,7 @@ namespace SH {
             "Input", "bControllerEnabled", controllerEnabled);
         gamepadMode =
             ini.GetBoolValue("Input", "bGamepadMode", gamepadMode);
+        fretsOnly = ini.GetBoolValue("Input", "bFretsOnly", fretsOnly);
         gamepadFret1 = static_cast<int>(ini.GetLongValue(
             "Input", "iGamepadFret1", gamepadFret1));
         gamepadFret2 = static_cast<int>(ini.GetLongValue(
@@ -241,6 +247,8 @@ namespace SH {
         payoutMinStars = static_cast<int>(
             ini.GetLongValue("Gold", "iPayoutMinStars", payoutMinStars));
         ownEnding = ini.GetBoolValue("SGT", "bOwnEnding", ownEnding);
+        duetPassthrough = ini.GetBoolValue("SGT", "bDuetPassthrough",
+                                           duetPassthrough);
         reactionNeutralStars  = static_cast<int>(ini.GetLongValue(
             "SGT", "iReactionNeutralStars", reactionNeutralStars));
         reactionPositiveStars = static_cast<int>(ini.GetLongValue(
@@ -414,7 +422,10 @@ namespace SH {
             ini.GetLongValue("SGT", "iPromote5Floor", promote5Floor));
         followerKeepAlive =
             ini.GetBoolValue("SGT", "bFollowerKeepAlive", followerKeepAlive);
+        enchantedBand =
+            ini.GetBoolValue("Band", "bEnchantedBand", enchantedBand);
         autoPlay = ini.GetBoolValue("Cheats", "bAutoPlay", autoPlay);
+        noFail   = ini.GetBoolValue("Cheats", "bNoFail", noFail);
         sgtNativeStart =
             ini.GetBoolValue("SGT", "bNativeStart", sgtNativeStart);
         closeInventoryOnTrigger = ini.GetBoolValue(
@@ -432,6 +443,18 @@ namespace SH {
         ini.LoadFile(kIniPath);
         ini.SetLongValue("Session", "iDifficulty", difficulty);
         ini.SetBoolValue("Session", "bPauseWorld", pauseWorld);
+        // UI-owned: a key the settings tool can change MUST be written here
+        // or the change silently reverts on the next load.
+        ini.SetBoolValue("Session", "bHandleLute", handleLute);
+        ini.SetBoolValue("Session", "bHandleFlute", handleFlute);
+        ini.SetBoolValue("Session", "bHandleDrum", handleDrum);
+        ini.SetBoolValue("Session", "bHandleGuitar", handleGuitar);
+        ini.SetBoolValue("SGT", "bDuetPassthrough", duetPassthrough);
+        ini.SetBoolValue("Band", "bEnchantedBand", enchantedBand);
+        ini.SetBoolValue("Input", "bFretsOnly", fretsOnly);
+        // In Save the moment it gained a UI: a key the settings tool can
+        // change but Save does not write silently reverts on the next load.
+        ini.SetBoolValue("Input", "bGamepadMode", gamepadMode);
         // Presentation, all now reachable from the settings page. A key the
         // UI can change MUST be written here or the change silently reverts
         // on the next load, which reads as the toggle being broken.
@@ -446,6 +469,7 @@ namespace SH {
         ini.SetDoubleValue("Audio", "fSongVolume", songVolume);
         ini.SetBoolValue("SGT", "bIdleKeepAlive", sgtIdleKeepAlive);
         ini.SetBoolValue("Cheats", "bAutoPlay", autoPlay);
+        ini.SetBoolValue("Cheats", "bNoFail", noFail);
         ini.SetDoubleValue("Stars", "fStar1", star1);
         ini.SetDoubleValue("Stars", "fStar2", star2);
         ini.SetDoubleValue("Stars", "fStar3", star3);

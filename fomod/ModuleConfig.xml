@@ -41,6 +41,7 @@ Thanks for installing, and if you enjoy it, a kind endorsement is always appreci
 							<image path="Images\bardhero.jpg"/>
 							<files>
 								<file source="optional\doomlute\Bard Hero - Doom Lute.esp" destination="Bard Hero - Doom Lute.esp" priority="0"/>
+								<file source="optional\doomlute\Bard Hero - Doom Lute_DESC.ini" destination="Bard Hero - Doom Lute_DESC.ini" priority="0"/>
 								<folder source="optional\doomlute\meshes" destination="meshes" priority="0"/>
 								<folder source="optional\doomlute\textures" destination="textures" priority="0"/>
 								<folder source="optional\doomlute\SKSE" destination="SKSE" priority="1"/>

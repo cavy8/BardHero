@@ -76,6 +76,7 @@
 #include "RE/S/ScriptEventSourceHolder.h"  // TESSpellCastEvent source
 #include "RE/S/SpellItem.h"                // perform-power lookup
 #include "RE/T/TESDataHandler.h"           // LookupForm
+#include "RE/T/TESGlobal.h"                // SGT's follower-duet flag
 #include "RE/T/TESSpellCastEvent.h"        // perform-power start trigger
 
 #include <SimpleIni.h>  // CSimpleIniA, referenced by FUCK_API.h (house ordering)
@@ -138,6 +139,11 @@ namespace SH {
             double resumeStartedAt = 0.0;  // QPC at kPaused -> kResuming
             bard::ResumeCountdown resumeCountdown;
             bool   resumeAudioStarted = false;
+            // QpcSec() when the session actually started. The fast-quit
+            // pose sweep arms only on a YOUNG abort, because the ghost it
+            // exists for is SGT's OnEffectStart thread still being in
+            // flight, and that thread is done within a few seconds.
+            double startedQpc = 0.0;
             std::uint32_t startCell = 0;   // FormID captured at start
             std::uint32_t startWs   = 0;   // worldspace FormID (0 = interior)
             bool          startInterior = false;
@@ -192,6 +198,9 @@ namespace SH {
         std::atomic<bool>  g_reqRestart{ false };  // pause menu Restart
         std::atomic<bool>  g_reqPracticeToggle{ false };  // pause menu
         std::atomic<bool>  g_reqStart{ false };  // perform-power cast -> start
+        // settings-tool instrument toggle -> re-resolve when nothing is
+        // mid-performance (see RequestPerformSpellResolve)
+        std::atomic<bool>  g_reqResolveSpells{ false };
         // Index = Songbook initiation context. Guitar is distinct here even
         // though its progression identity aliases to lute.
         std::atomic<RE::FormID>
@@ -305,6 +314,22 @@ namespace SH {
         constexpr int    kProbeCount      = 8;
         double g_probeEndAt = 0.0;          // QpcSec() at session end
         int    g_probeIdx   = kProbeCount;  // >= kProbeCount = disarmed
+        // Fast-quit pose sweep (field 2026-07-30: "when i select quit,
+        // sometimes i can end up playing the lute... when i enter the
+        // minigame and immediately quit"). The abort strip dispels the
+        // effect, but Papyrus never kills SGT's in-flight OnEffectStart
+        // thread, so on a young session its PlayIdle can land AFTER the
+        // one-shot pose release and nothing re-releases. These passes
+        // re-fire ReleasePerformPose across the landing window. Three
+        // shots, not a cadence: the browse standstill proved per-500ms
+        // spam visibly jitters the player.
+        constexpr double kPoseSweepSchedule[] = { 0.8, 2.0, 3.5 };
+        constexpr int    kPoseSweepCount      = 3;
+        // A session younger than this at abort may still have SGT's start
+        // thread in flight; OnEffectStart's own waits and clip start are
+        // all inside the first few seconds.
+        constexpr double kPoseSweepYoungSec   = 6.0;
+        int    g_poseSweepIdx = kPoseSweepCount;  // disarmed
         // control-recovery retry window (session thread). Armed alongside
         // the probes at session end; retries only while the world is
         // unpaused, because the immediate attempt fires under our own pause.
@@ -668,6 +693,12 @@ namespace SH {
                 auto* pc = RE::PlayerCharacter::GetSingleton();
                 auto* sp = RE::TESForm::LookupByID<RE::SpellItem>(spell);
                 if (pc && sp && pc->HasSpell(sp)) {
+                    // BEFORE RemoveSpell, same task: the exit idle is read
+                    // off the effect this strip is about to make
+                    // unfindable, and a fast quit reaches here ahead of
+                    // the keeper's first 5s pass, which used to be the
+                    // only place that cached it.
+                    SgtVm::TryCacheStopIdle(spell);
                     pc->RemoveSpell(sp);
                     spdlog::info(
                         "[session] SGT perform ability still active at "
@@ -1942,6 +1973,45 @@ namespace SH {
                     a_inst);
                 return;
             }
+            // Belt for the hook's own guard: the poll also calls this, and a
+            // duet the hook stood down for leaves the ability in place for
+            // the poll to find.
+            //
+            // Session:: is REQUIRED here. FirePerformTrigger is a free
+            // function in Session.cpp's anonymous namespace, not a member,
+            // so an unqualified DuetPending() does not resolve.
+            //
+            // ⚠ KNOWN LIMIT, and it is only reachable in one state. Normally
+            // the hook arms this instrument via NoteDuetPassthrough, so
+            // NotePoll's `mask & ~armed_` never reports it fresh again and
+            // this branch is never even evaluated from the poll. It goes
+            // live only if the hook FAILED TO INSTALL (see the two logged
+            // error paths in PerformTriggerHook::Install) - and there
+            // nothing samples DuetPending synchronously, so this read is
+            // racing SGT's Papyrus dispatch across a 500ms poll gap. SGT
+            // clears _Talent_FollowerPlays as its clip starts, so losing
+            // that race reads FALSE for a duet already playing and opens
+            // the songbook on top of it. Left unhandled deliberately: the
+            // precondition is rare and loudly logged, and in that state
+            // nothing strips the ability either, so BardHero and SGT
+            // already overlap for an ordinary equip.
+            if (performtrigger::DecideTrigger(
+                    true, Settings::GetSingleton().duetPassthrough,
+                    Session::DuetPending()) ==
+                performtrigger::TriggerAction::kStandDownForDuet) {
+                g_arming.NoteSelfAdd(a_inst);
+                // The "(bDuetPassthrough)" tail is VERBATIM the hook's line,
+                // because that literal is what field testers are told to
+                // grep for. The source tag goes AFTER it, never inside the
+                // parens, so one grep still finds both sites while the tag
+                // says which one caught it - the tell for the degraded case
+                // described above.
+                spdlog::info(
+                    "[sgt] follower duet pending - standing down so SGT "
+                    "plays it (bDuetPassthrough) [{}]",
+                    a_source);
+                return;
+            }
             const auto progression =
                 static_cast<stars::Instrument>(progressionContext);
             // Game thread (both the AddTarget hook and the poll task), so
@@ -2359,7 +2429,15 @@ namespace SH {
                     // movement and skips the instrument prop entirely.
                     SgtVm::SetGuitarAnimObjectOverride(guitarProp);
                     SgtVm::ForceEnableMovementGlobal();
-                    if (guitarProp) {
+                    // The band is the single most invasive thing this mod
+                    // does to a live scene: four actors conjured mid-song,
+                    // into a frame that third-party physics and overlay
+                    // hooks are already walking. It needs its own off
+                    // switch, because "turn the feature off and see" is the
+                    // only isolation step that settles a render-thread CTD
+                    // in one run rather than five (the heap-corruption CTD
+                    // of 2026-07-27 was closed exactly that way).
+                    if (guitarProp && Settings::GetSingleton().enchantedBand) {
                         bard::BandStage::Begin(a_context, a_bandStems);
                     }
                     if (!pc->HasSpell(sp)) {
@@ -2603,6 +2681,10 @@ namespace SH {
             const auto   inst    = g_s->instrument;
             const int    instrumentContext = g_s->instrumentContext;
             const double songLen = g_s->songLen;
+            // 0.0 startedQpc (a session that never reached "started") reads
+            // as infinitely old on purpose: no start, no ghost to sweep.
+            const double sessionAgeSec =
+                g_s->startedQpc > 0.0 ? QpcSec() - g_s->startedQpc : 1.0e9;
             // Capture before teardown resets the public HUD value. Stars
             // describe the whole performance; this last live zone prevents
             // an excellent average followed by a severe fumble from earning
@@ -2856,6 +2938,20 @@ namespace SH {
                 }
             } else if (!crowdFailed) {
                 PostEndSgtPerformance(instrumentContext);
+                // A quit this early can race SGT's still-running start
+                // thread: the strip's one-shot release fires, then the
+                // orphaned PlayIdle lands on top of it. Arm the sweep.
+                // Not on completion (a completed song is never young) and
+                // not on crowd failure (its own delayed teardown owns that
+                // path, and the failure gate cannot fire this early).
+                if (!completed && sessionAgeSec < kPoseSweepYoungSec) {
+                    g_poseSweepIdx = 0;
+                    spdlog::info(
+                        "[sgt] fast quit at {:.1f}s - pose sweep armed "
+                        "({} passes over {:.1f}s)",
+                        sessionAgeSec, kPoseSweepCount,
+                        kPoseSweepSchedule[kPoseSweepCount - 1]);
+                }
             }
             // post-session lock diagnostics (field round 3): kProbeSchedule,
             // from +0.0s (baseline at the instant of end) out to +20s
@@ -2896,6 +2992,11 @@ namespace SH {
             // performance (fast re-start: the ability carries over and the
             // strip would kill it mid-song -> keeper kLost -> abort)
             g_endStripSpell = 0;
+            // ...and neither may a leftover fast-quit pose sweep: its
+            // ReleasePerformPose would end the pose THIS session is about
+            // to play (quit fast, re-enter fast - the exact habit that
+            // found the ghost-idle bug in the first place).
+            g_poseSweepIdx = kPoseSweepCount;
             auto        s  = std::make_unique<SessionData>();
             s->difficulty  = difficulty;
 
@@ -3049,6 +3150,17 @@ namespace SH {
                            : 1.0;
             s->rules    = s->practice ? bard::practice::PracticeRules()
                                       : bard::practice::PerformanceRules();
+            // The No Fail cheat rides the rail practice already proved:
+            // flip the ONE rules field, here at the resolve site, so the
+            // stateful failure gate stays short-circuited rather than
+            // fed-and-ignored. Resolved once like every other rule - a
+            // toggle mid-song does not rescue a run already dying, and the
+            // settings page says so.
+            if (!s->practice && Settings::GetSingleton().noFail) {
+                s->rules.allowFailure = false;
+                spdlog::info("[session] No Fail is on - the crowd-patience "
+                             "gate is disabled for this song");
+            }
             if (s->practice) {
                 s->fullChart = s->song.chart;  // keep the unsliced original
                 s->range     = bard::practice::ResolveRange(
@@ -3382,6 +3494,7 @@ namespace SH {
             g_lastPicked            = picked;
             g_lastDifficulty        = difficulty;
             g_lastInstrumentContext = g_s->instrumentContext;
+            g_s->startedQpc         = QpcSec();
             spdlog::info(
                 "[session] started: len={:.1f}s startFrame={} lead={:.2f}s "
                 "weaponDrawn={} practice={} startAt={:.2f}s",
@@ -4245,6 +4358,19 @@ namespace SH {
                         [busy] { TryBardTeaching(busy); });
                 }
 
+                // Instrument toggles land here rather than in the settings
+                // tool, and only when nothing is mid-performance. Same three
+                // conditions the teaching poll calls "busy", for the same
+                // reason: g_performSpell[] is re-read live by the keeper
+                // pass, the end-strip and the payout tail.
+                if (g_reqResolveSpells.load() &&
+                    state == State::kIdle && !g_pendingPayout.has_value() &&
+                    g_endStripSpell == 0) {
+                    g_reqResolveSpells.store(false);
+                    SKSE::GetTaskInterface()->AddTask(
+                        [] { Session::ResolvePerformSpells(); });
+                }
+
                 // a save load invalidates a payout still waiting on
                 // results-close (see g_pendingPayout)
                 if (g_dropPendingPayout.exchange(false) && g_pendingPayout) {
@@ -4369,6 +4495,32 @@ namespace SH {
                     ++g_probeIdx;
                     SKSE::GetTaskInterface()->AddTask(
                         [no] { LogControlProbe(no); });
+                }
+
+                // Fast-quit pose sweep, riding the same end-anchored clock
+                // as the probes. Each pass re-fires the pose release so a
+                // PlayIdle that landed after the strip is ended within a
+                // couple of seconds instead of never. Skipped while paused
+                // WITHOUT consuming the pass - an event sent into a paused
+                // graph can be dropped, the trap the one-shot release
+                // already documents.
+                if (g_poseSweepIdx < kPoseSweepCount &&
+                    QpcSec() >=
+                        g_probeEndAt + kPoseSweepSchedule[g_poseSweepIdx]) {
+                    const int pass = g_poseSweepIdx + 1;
+                    ++g_poseSweepIdx;
+                    SKSE::GetTaskInterface()->AddTask([pass] {
+                        // A pass landing under a menu pause is dropped, not
+                        // deferred - an event into a paused graph can be
+                        // lost silently, and three spread passes exist
+                        // precisely so one casualty does not matter.
+                        auto* ui = RE::UI::GetSingleton();
+                        if (ui && ui->GameIsPaused()) { return; }
+                        spdlog::info(
+                            "[sgt] fast-quit pose sweep (pass {}/{})",
+                            pass, kPoseSweepCount);
+                        SgtVm::ReleasePerformPose();
+                    });
                 }
 
                 if (state == State::kIdle) {
@@ -5166,17 +5318,89 @@ namespace SH {
         }
     }
 
-    void Session::Install() {
-        if (auto* ui = RE::UI::GetSingleton()) {
-            ui->AddEventSink<RE::MenuOpenCloseEvent>(MenuSink::GetSingleton());
+    void Session::NoteDuetPassthrough(RE::FormID a_id) {
+        if (a_id == 0) { return; }
+        for (int i = 0;
+             i < songeligibility::kInstrumentContextCount; ++i) {
+            if (g_performSpell[i].load() == a_id) {
+                g_arming.NoteSelfAdd(i);
+                return;
+            }
         }
+    }
 
+    namespace {
+        // SGT's follower-duet flag. Resolved by EDITOR ID, never by FormID,
+        // so a merged or repacked SGT still works and a renumber shows up as
+        // a warning instead of a feature that silently does nothing forever.
+        // Same rule as MoodGlobals.cpp, for the same reason.
+        //
+        // Written once at kDataLoaded, before the session thread exists -
+        // later reads from any thread need no synchronization.
+        RE::TESGlobal* g_duetGlobal = nullptr;
+
+        constexpr const char* kFollowerPlaysEdid = "_Talent_FollowerPlays";
+        // CROSS-CHECK ONLY, never the resolution path. Read out of the
+        // shipped SkyrimsGotTalent-Bards.esp on 2026-07-29 with a parser
+        // first validated against the two ids MoodGlobals already pins.
+        constexpr RE::FormID kFollowerPlaysLocalExpected = 0x010138;
+
+        void ResolveDuetGlobal() {
+            auto* dh = RE::TESDataHandler::GetSingleton();
+            if (!dh) { return; }
+            for (auto* g : dh->GetFormArray<RE::TESGlobal>()) {
+                if (!g) { continue; }
+                const char* edid = g->GetFormEditorID();
+                if (edid && std::strcmp(edid, kFollowerPlaysEdid) == 0) {
+                    g_duetGlobal = g;
+                    break;
+                }
+            }
+            if (!g_duetGlobal) {
+                spdlog::info("[sgt] {} not found - follower duets are not "
+                             "in this load order",
+                             kFollowerPlaysEdid);
+                return;
+            }
+            const RE::FormID local = g_duetGlobal->formID & 0x00FFFFFF;
+            if (local == kFollowerPlaysLocalExpected) {
+                spdlog::info("[sgt] {} = 0x{:08X}", kFollowerPlaysEdid,
+                             g_duetGlobal->formID);
+            } else {
+                spdlog::warn("[sgt] {} = 0x{:08X} (local 0x{:06X}, expected "
+                             "0x{:06X}) - SGT renumbered; editor-ID "
+                             "resolution still correct",
+                             kFollowerPlaysEdid, g_duetGlobal->formID, local,
+                             kFollowerPlaysLocalExpected);
+            }
+        }
+    }
+
+    bool Session::DuetPending() {
+        return g_duetGlobal && g_duetGlobal->value != 0.0f;
+    }
+
+    void Session::ResolvePerformSpells() {
         // Resolve the three native SGT start triggers plus the optional
-        // Electric addon trigger. This runs on the game thread at
-        // kDataLoaded (forms are loaded), so the RE:: lookup is legal;
-        // g_performSpell[] is the only surface the session thread reads.
+        // Electric addon trigger. Game thread (kDataLoaded, or the settings
+        // tool's posted task), so the RE:: lookup is legal; g_performSpell[]
+        // is the only surface the session thread reads.
         auto resolveSpell = [](const std::string& a_spec,
-                               const char* a_inst) -> RE::FormID {
+                               const char* a_inst,
+                               bool        a_handled) -> RE::FormID {
+            // Turned off by the player. Storing 0 is the WHOLE mechanism:
+            // IsPerformSpell can never match 0, so the AddTarget hook does
+            // not fire, nothing is stripped, and SGT runs its own flow.
+            // Logged distinctly from the not-found case on purpose - "you
+            // turned this off" and "your FormID is wrong" must never look
+            // the same in a log.
+            if (!a_handled) {
+                spdlog::info(
+                    "[session] perform trigger ({}): handed to SGT by "
+                    "setting - BardHero will not respond to this instrument",
+                    a_inst);
+                return 0;
+            }
             const auto bar = a_spec.find('|');
             if (bar == std::string::npos) { return 0; }
             const std::string plugin  = a_spec.substr(0, bar);
@@ -5205,19 +5429,36 @@ namespace SH {
         };
         const auto& stg = Settings::GetSingleton();
         g_performSpell[static_cast<int>(stars::Instrument::kLute)].store(
-            resolveSpell(stg.performSpell, "lute"));
+            resolveSpell(stg.performSpell, "lute", stg.handleLute));
         g_performSpell[static_cast<int>(stars::Instrument::kFlute)].store(
-            resolveSpell(stg.performSpellFlute, "flute"));
+            resolveSpell(stg.performSpellFlute, "flute", stg.handleFlute));
         g_performSpell[static_cast<int>(stars::Instrument::kDrum)].store(
-            resolveSpell(stg.performSpellDrum, "drum"));
+            resolveSpell(stg.performSpellDrum, "drum", stg.handleDrum));
         g_performSpell[songeligibility::kGuitar].store(
-            resolveSpell(stg.performSpellGuitar, "guitar"));
+            resolveSpell(stg.performSpellGuitar, "guitar", stg.handleGuitar));
+    }
+
+    void Session::RequestPerformSpellResolve() {
+        g_reqResolveSpells.store(true);
+    }
+
+    void Session::Install() {
+        if (auto* ui = RE::UI::GetSingleton()) {
+            ui->AddEventSink<RE::MenuOpenCloseEvent>(MenuSink::GetSingleton());
+        }
+
+        ResolvePerformSpells();
+        ResolveDuetGlobal();
         // resolve SGT's expertise GLOBs in the same kDataLoaded context
         SgtProgression::Install();
         ResolveLocTypeInn();  // ...and the payout's venue keyword
         // a stale electric-perform flag must never survive into this
         // process (the OAR player clip keys on it)
         SgtVm::ClearElectricPerformGlobal();
+        // Record the shared lute prop as the GAME shipped it, before the
+        // band or a guitar performance can write to that record. Captured
+        // late, it can enshrine one of ours as the restore target.
+        SgtVm::CaptureAnimObjectBaseline();
 
         if (AnySpell()) {
             RE::ScriptEventSourceHolder::GetSingleton()

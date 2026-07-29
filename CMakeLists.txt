@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.21)
 # docs/specs/2026-07-18-rhythm-engine-design.md. The display name lives ONLY
 # in src/Branding.h. The SKSE co-save serialization ID stays 'SKHR' on
 # purpose - changing it would orphan existing star/last-played data.
-project(BardHero VERSION 1.1.0 LANGUAGES CXX)
+project(BardHero VERSION 1.2.0 LANGUAGES CXX)
 
 find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)

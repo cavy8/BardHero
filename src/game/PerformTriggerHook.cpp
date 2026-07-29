@@ -4,6 +4,7 @@
 #include "PerformTriggerHook.h"
 
 #include "Settings.h"
+#include "game/PerformTriggerLogic.h"
 #include "game/Session.h"
 
 #include "RE/M/MagicItem.h"
@@ -20,6 +21,21 @@ namespace SH {
                 if (pc && a_this == pc->AsMagicTarget() && a_data.magicItem) {
                     const auto id = a_data.magicItem->GetFormID();
                     if (Session::IsPerformSpell(id)) {
+                        // The player asked a follower to play together. SGT
+                        // builds that duet inside the OnEffectStart we are
+                        // about to prevent, so BardHero takes none of this
+                        // equip: no arming, no strip, no songbook, no
+                        // sheathe. SGT runs the whole performance.
+                        if (performtrigger::DecideTrigger(
+                                true, Settings::GetSingleton().duetPassthrough,
+                                Session::DuetPending()) ==
+                            performtrigger::TriggerAction::kStandDownForDuet) {
+                            Session::NoteDuetPassthrough(id);
+                            spdlog::info(
+                                "[sgt] follower duet pending - standing down "
+                                "so SGT plays it (bDuetPassthrough)");
+                            return ret;
+                        }
                         // TRIGGER OF RECORD (Phase 1). The 500ms poll stays
                         // as a belt; the shared Arming latch means only one
                         // of the two fires per arming.

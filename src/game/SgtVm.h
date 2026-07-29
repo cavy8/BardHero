@@ -134,6 +134,16 @@ namespace SH::SgtVm {
     // ends - SGT's IdleStop_Loose cleanup dies on the dispelled effect.
     void ReleasePerformPose();
 
+    // Game thread, in the SAME task as an abort's RemoveSpell and BEFORE
+    // it: the last chance to read SGT's exit idle off the still-findable
+    // effect. The keeper caches it too, but its first pass is 5s in, and a
+    // fast quit beats that - the release then falls back to
+    // IdleForceDefaultState, which its own comment records has never once
+    // ended the lute idle. No-op when already cached or the script object
+    // is not bound (and an unbound object means OnEffectStart never ran,
+    // so there is no idle to ghost in the first place).
+    void TryCacheStopIdle(RE::FormID a_spellId);
+
     // Game thread, at song pick BEFORE the AddSpell that starts SGT's real
     // performance. Saves the player's `_Talent_EnableMovement` and forces
     // it to 1, because SGT's OnEffectStart branches on it: at 1 it leaves
@@ -165,6 +175,18 @@ namespace SH::SgtVm {
     // or even a bass"). BandStage calls this one capture-interval after
     // each of its swaps and again at teardown.
     void ReassertAnimObjectBaseline();
+
+    // Game thread, kDataLoaded, BEFORE anything can have touched the shared
+    // AnimObjectLute record. Records what the game shipped, which is the
+    // value every later restore is measured against.
+    //
+    // Must run early, because the capture used to be lazy and could enshrine
+    // one of OUR prop models as "vanilla" - a band run before the first
+    // guitar performance made the BASS the baseline, and every restore after
+    // that faithfully put a bass on the shared record, for our lute sets and
+    // for vanilla NPC bards alike, for the rest of the process (field
+    // 2026-07-29, "sometimes we can still get the bass guitar").
+    void CaptureAnimObjectBaseline();
 
     // Game thread, kDataLoaded AND post-load/new-game. The electric
     // perform global lives in saves: a save written mid-electric-perform

@@ -108,9 +108,18 @@ namespace SH {
         void FeedButton(std::uint32_t code, bool down, double qpcNowSec,
                         const GamepadBinds& binds, bool engaged,
                         bool gamepadMode, std::vector<MappedEvent>& out);
+        // graceSec: same chord-join window as the keyboard's fret-only mode
+        // (see InputMapper::Feed) - a controller chord pressed across two
+        // input frames armed a second auto-strum straight into the engine's
+        // still-pending first one, which is an immediate overstrum. Same
+        // mechanism, found via the keyboard field report of 2026-07-29. A
+        // d-pad strum arms the window too, so d-pad + fret in one frame no
+        // longer double-strums. Defaulted so existing callers keep the old
+        // 50ms engine default; the hook passes the live tuning value.
         void EndFrame(double qpcNowSec, const GamepadBinds& binds,
                       bool engaged, bool gamepadMode,
-                      std::vector<MappedEvent>& out);
+                      std::vector<MappedEvent>& out,
+                      double graceSec = 0.050);
         void EmitEngageDiff(double qpcNowSec, const GamepadBinds& binds,
                             std::vector<MappedEvent>& out);
         void Reset();
@@ -125,6 +134,8 @@ namespace SH {
         bool         _whammyHeldRaw = false;
         bool         _whammyEdge    = false;
         bool         _autoStrum     = false;
+        // Last strum emitted, manual or auto (see InputMapper::_lastStrumAt).
+        double       _lastStrumAt   = -1.0e18;
     };
 
     class InputMapper {
@@ -142,8 +153,32 @@ namespace SH {
         // nothing (M0: pre-existing/garbage entries must never replay).
         // Held state is tracked on every call; `out` gets events only while
         // `engaged`.
+        //
+        // fretsOnly: every fret PRESS also strums, so the strum key is not
+        // needed at all. The keyboard twin of Gamepad Mode, asked for by two
+        // players on the same day who cannot press Space and a fret at once.
+        // ONE strum per Feed batch: a chord arrives as several fret events
+        // in a single DI buffer and must strum once. The strum carries the
+        // triggering fret's OWN event timestamp rather than frame time -
+        // the whole reason this path reads the DI buffer is that its stamps
+        // are sub-frame, and the strum is the input that decides the score.
+        //
+        // fretsOnlyGraceSec: how long after a strum a new fret press JOINS
+        // the chord instead of strumming again. Field 2026-07-29, first
+        // fret-only session: a human chord spreads over 20-100ms, which
+        // crosses Feed batches, so per-batch coalescing alone re-strummed
+        // into the engine's still-pending first strum - and a second strum
+        // while one is pending is an IMMEDIATE overstrum
+        // (GuitarEngine.cpp "double strum"). Pass the engine's OWN live
+        // strum leniency (difficulty::EngineParamsFor(tuning).strumLeniency)
+        // and the two windows agree by construction: while the engine would
+        // still accept the chord completing, the mapper stays quiet; once
+        // the pending strum is gone, a fresh press strums again. A manual
+        // strum-key strum arms the same window, so strumming a chord and
+        // fretting it a few ms later cannot double-strum either.
         FeedStats Feed(const DiEvent* buf, int len, std::uint32_t tgtNow,
                        double qpcNowSec, const Binds& binds, bool engaged,
+                       bool fretsOnly, double fretsOnlyGraceSec,
                        std::vector<MappedEvent>& out);
 
         // Call on the disengaged -> engaged transition, AFTER that frame's
@@ -173,6 +208,10 @@ namespace SH {
         bool          _seeded        = false;
         std::uint8_t  _heldRaw       = 0;  // bits 0-4 frets, bit 5 SP (physical)
         std::uint8_t  _heldEngine    = 0;  // what the engine has been told
+        // QPC time of the last strum we emitted, manual or auto. The
+        // fret-only chord-join window measures from here; hugely negative
+        // so the first strum after Reset always emits.
+        double        _lastStrumAt   = -1.0e18;
         bool          _whammyHeldRaw = false;
     };
 }

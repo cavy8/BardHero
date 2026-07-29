@@ -148,6 +148,9 @@ namespace SH {
             if (down) {
                 out.push_back(
                     { qpcNowSec, bard::InputAction::kStrum, 1, code });
+                // Arms the chord-join window: d-pad strum + fret in the
+                // same frame must not add an auto-strum on top.
+                _lastStrumAt = qpcNowSec;
             }
         } else if (slot == 7) {
             out.push_back({ qpcNowSec, bard::InputAction::kWhammy,
@@ -160,10 +163,17 @@ namespace SH {
 
     void GamepadMapper::EndFrame(
         double qpcNowSec, const GamepadBinds& binds, bool engaged,
-        bool gamepadMode, std::vector<MappedEvent>& out) {
-        if (engaged && gamepadMode && _autoStrum) {
+        bool gamepadMode, std::vector<MappedEvent>& out, double graceSec) {
+        // Grace gate: a chord pressed across two frames re-armed the auto-
+        // strum while the engine's first strum was still pending, which is
+        // an immediate overstrum. Same fix as the keyboard's fret-only
+        // path, same window; found via the 2026-07-29 keyboard field
+        // report - this path had the identical latent defect.
+        if (engaged && gamepadMode && _autoStrum &&
+            qpcNowSec - _lastStrumAt >= graceSec) {
             out.push_back({ qpcNowSec, bard::InputAction::kStrum, 1,
                             static_cast<std::uint32_t>(binds.fret[0]) });
+            _lastStrumAt = qpcNowSec;
         }
         _autoStrum = false;
         if (engaged && _whammyHeldRaw && !_whammyEdge) {
@@ -199,8 +209,14 @@ namespace SH {
                                              std::uint32_t tgtNow,
                                              double qpcNowSec,
                                              const Binds& binds, bool engaged,
+                                             bool         fretsOnly,
+                                             double fretsOnlyGraceSec,
                                              std::vector<MappedEvent>& out) {
         FeedStats st;
+        // Latest fret PRESS seen in this batch, and the key that caused it.
+        // Negative means no fret went down, so nothing auto-strums.
+        double        autoStrumAt  = -1.0;
+        std::uint32_t autoStrumDik = 0;
         if (!_seeded) {
             // whatever already sits in the buffer predates this session and
             // must never replay (M0 seeding rule)
@@ -269,6 +285,12 @@ namespace SH {
                         down ? (_heldEngine | bit)
                              : static_cast<std::uint8_t>(_heldEngine & ~bit);
                     ++st.mapped;
+                    // Arm, do not emit. Emitting here would strum once per
+                    // fret and turn every chord into an overstrum.
+                    if (down && fretsOnly) {
+                        autoStrumAt  = qpc;
+                        autoStrumDik = e.ofs;
+                    }
                     break;
                 }
                 case 5:
@@ -289,6 +311,11 @@ namespace SH {
                         out.push_back(
                             { qpc, bard::InputAction::kStrum, 1, e.ofs });
                         ++st.mapped;
+                        // The manual strum arms the same chord-join window
+                        // the auto-strum uses: strum the chord, fret it a
+                        // few ms later, and fret-only must not strum again
+                        // into the engine's still-pending strum.
+                        _lastStrumAt = qpc;
                     }
                     break;
                 case 7:
@@ -307,6 +334,29 @@ namespace SH {
                 default:
                     break;
             }
+        }
+
+        // Fret-only mode's single strum for this batch. AFTER the loop so
+        // it lands behind its own fret presses in the queue (the engine
+        // needs the frets applied before the strum that judges them), and
+        // stamped with that fret's event time so the mode keeps the sub-
+        // frame accuracy the scoring rests on.
+        //
+        // The grace gate is the field fix (2026-07-29, "sometimes when i
+        // press chords it overstrums"): a human chord spreads across Feed
+        // batches, and the engine treats a second strum while the first is
+        // still pending as an immediate overstrum. Within the grace the
+        // press only adds its fret; the engine's pending strum then hits
+        // the completed chord itself, timestamped where the chord began.
+        // NOT updated on a suppressed press, deliberately: the pending
+        // strum's clock runs from the strum that armed it, and once that
+        // window is over a fresh press must strum again.
+        if (engaged && autoStrumAt >= 0.0 &&
+            autoStrumAt - _lastStrumAt >= fretsOnlyGraceSec) {
+            out.push_back({ autoStrumAt, bard::InputAction::kStrum, 1,
+                            autoStrumDik });
+            ++st.mapped;
+            _lastStrumAt = autoStrumAt;
         }
 
         // DI delivers edges only; the engine's 250ms whammy window

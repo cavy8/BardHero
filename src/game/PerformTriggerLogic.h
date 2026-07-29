@@ -1,8 +1,15 @@
 // src/game/PerformTriggerLogic.h
 #pragma once
 
-// PURE arming arbitration for the SGT perform trigger (no RE/OS includes -
-// suite 20). Spec: docs/specs/2026-07-20-native-perform-start.md.
+#include <cstdint>
+
+// PURE decision layer for the SGT perform trigger (no RE/OS includes -
+// suite 20). Three concerns live here, in file order: arming arbitration
+// between the hook and the poll, what a trigger should DO once armed
+// (DecideTrigger, incl. the duet handoff), and the browse-sheathe state
+// machine. Specs: docs/specs/2026-07-20-native-perform-start.md and
+// docs/superpowers/specs/2026-07-29-sgt-coexistence-and-doom-lute-
+// description-design.md.
 //
 // Two sources report the same arming:
 //   - MagicTarget::AddTarget hook - synchronous, authoritative, field-
@@ -60,6 +67,32 @@ namespace SH::performtrigger {
     private:
         int armed_ = 0;
     };
+
+    // What a perform trigger should do, decided in one place so the
+    // AddTarget hook and FirePerformTrigger cannot disagree.
+    //
+    // kStandDownForDuet exists because SGT's follower duet is started from
+    // _Talent_PlayInstrument.OnEffectStart, which native start prevents from
+    // running at all. The dialogue option is a separate record we never
+    // touch, so before this the option appeared and then did nothing (Nexus
+    // field report, 1.1).
+    enum class TriggerAction : std::uint8_t {
+        kIgnore,            // not our instrument; the hook never got here
+        kStandDownForDuet,  // SGT plays this one, whole performance
+        kRun,               // BardHero opens the songbook
+    };
+
+    // a_handled     - the instrument resolved to a trigger spell
+    // a_passthrough - [SGT] bDuetPassthrough
+    // a_duetPending - SGT's _Talent_FollowerPlays global reads nonzero
+    [[nodiscard]] constexpr TriggerAction DecideTrigger(
+        bool a_handled, bool a_passthrough, bool a_duetPending) noexcept {
+        if (!a_handled) { return TriggerAction::kIgnore; }
+        if (a_passthrough && a_duetPending) {
+            return TriggerAction::kStandDownForDuet;
+        }
+        return TriggerAction::kRun;
+    }
 
     // The perform idles (instrument ANIO clips and the electric body
     // clip) require a sheathed actor: with a weapon or magic drawn the

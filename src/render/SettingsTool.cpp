@@ -10,6 +10,7 @@
 #include "game/InputHook.h"
 #include "game/KeyNamesLogic.h"
 #include "game/PerformanceCamera.h"
+#include "game/Session.h"
 #include "game/SongLibrary.h"
 #include "game/SgtProgression.h"
 #include "game/StarLedger.h"
@@ -172,6 +173,17 @@ namespace SH {
                     }
                     FUCK::TextDisabled(
                         "Hit bursts, sustain flames, fret kicks, beat pulse");
+                    // Read at song pick rather than at load, so this one is
+                    // live: no restart note belongs under it.
+                    if (FUCK::Checkbox("Conjured band on guitar songs",
+                                       &st.enchantedBand)) {
+                        ui_sound::Play(ui_sound::Event::kConfirm);
+                        save = true;
+                    }
+                    FUCK::TextDisabled(
+                        "A skeleton bassist, guitarist, drummer and singer "
+                        "join you. Turn off if the game crashes shortly "
+                        "after a guitar song starts");
                     {
                         // The threshold IS the toggle - streakfire::Enabled
                         // reads 0 as off, so a second bool would be a second
@@ -279,6 +291,51 @@ namespace SH {
                     auto& tuning = st.tuning;
                     FUCK::TextDisabled(
                         "Timing changes apply when the next song starts");
+
+                    FUCK::SeparatorText("Playing style");
+                    // Live: RefreshBinds re-reads it on the hook thread at
+                    // frame start, so no restart note belongs here.
+                    // Device named IN the label: these two toggles are the
+                    // same mechanism for different devices, and the owner's
+                    // own first read of the pair was "wait, are these the
+                    // same thing?" (2026-07-30). If the person who built
+                    // the mod has to ask which device a row governs, a
+                    // player has no chance.
+                    if (FUCK::Checkbox("Keyboard: fret-only (no strum key)",
+                                       &st.fretsOnly)) {
+                        ui_sound::Play(ui_sound::Event::kConfirm);
+                        save = true;
+                        InputHook::RefreshBinds();
+                    }
+                    FUCK::TextDisabled(
+                        "Pressing a fret strums by itself, so you never need "
+                        "the strum key. A chord still counts as one strum. "
+                        "The strum key keeps working either way.");
+                    if (st.fretsOnly) {
+                        // The honest caveat, where it is switched rather
+                        // than in a readme: this is not a straight win.
+                        FUCK::TextDisabled(
+                            "Careful: a fret pressed when no note is due now "
+                            "costs you an overstrum.");
+                    }
+                    // The controller twin, surfaced on a field report from a
+                    // player with a REAL guitar controller (RetroCult,
+                    // registers as XInput): with this on, fretting strums,
+                    // so an actual strum bar is useless. The key existed in
+                    // the INI since native controller support landed but had
+                    // no UI, which for that player reads as "cannot strum".
+                    if (FUCK::Checkbox("Controller: Gamepad Mode "
+                                       "(fret press strums)",
+                                       &st.gamepadMode)) {
+                        ui_sound::Play(ui_sound::Event::kConfirm);
+                        save = true;
+                    }
+                    FUCK::TextDisabled(
+                        "The same idea for a pad, and how Clone Hero plays "
+                        "one: tap frets to hit notes, D-pad strums the open "
+                        "ones. Leave it on for a pad. Playing a real guitar "
+                        "controller with a strum bar? Turn it OFF and strum "
+                        "for yourself.");
 
                     FUCK::SeparatorText("Notes and timing");
                     save |= SliderDouble("Hit window scale",
@@ -431,6 +488,21 @@ namespace SH {
                     FUCK::TextDisabled(
                         "Frets/strum are ignored while on; pause still works. "
                         "Score, stars, XP and gold all still count.");
+                    if (FUCK::Checkbox("No Fail (the crowd never ends the "
+                                       "song)",
+                                       &st.noFail)) {
+                        ui_sound::Play(ui_sound::Event::kConfirm);
+                        save = true;
+                    }
+                    // "next song" because the session's rules are resolved
+                    // ONCE at start (PracticeSessionRules contract) - a
+                    // toggle mid-song cannot rescue a run already dying,
+                    // and saying so here beats a player concluding the
+                    // cheat is broken.
+                    FUCK::TextDisabled(
+                        "However badly it goes, the song plays to the end. "
+                        "Stars and gold still judge the run honestly. Takes "
+                        "effect when the next song starts.");
 
                     FUCK::SeparatorText("Items");
                     // The Doom Lute is normally earned at the Atronach Forge.
@@ -681,6 +753,60 @@ namespace SH {
                     }
                 };
 
+                const auto drawInstruments = [&] {
+                    FUCK::TextDisabled(
+                        "Pick which instruments open the BardHero songbook. "
+                        "An instrument you leave unticked belongs to "
+                        "Skyrim's Got Talent instead, with its own "
+                        "performances, its own songs, and playing together "
+                        "with your followers.");
+                    // Without SGT there is nothing to hand an instrument
+                    // back TO: unticking one just makes it do nothing at
+                    // all. Same check drawCheats already uses one tab over,
+                    // for the same reason - say so rather than let a player
+                    // switch an instrument off and find it dead.
+                    if (!SgtProgression::Available()) {
+                        FUCK::TextDisabled(
+                            "Skyrim's Got Talent was not found. Unticking an "
+                            "instrument here will simply stop it doing "
+                            "anything.");
+                    }
+                    FUCK::SeparatorText("Instruments");
+
+                    struct Row { const char* label; bool* value; };
+                    // The Doom Lute row shows whether or not the optional
+                    // plugin is installed. Hiding it on an unresolved FormID
+                    // would make the tab's shape depend on install state for
+                    // no gain, and the row is harmless when the item does
+                    // not exist.
+                    const Row rows[4] = {
+                        { "Lute opens the songbook",      &st.handleLute },
+                        { "Flute opens the songbook",     &st.handleFlute },
+                        { "Drum opens the songbook",      &st.handleDrum },
+                        { "Doom Lute opens the songbook", &st.handleGuitar },
+                    };
+                    bool changed = false;
+                    for (const auto& r : rows) {
+                        if (FUCK::Checkbox(r.label, r.value)) {
+                            ui_sound::Play(ui_sound::Event::kConfirm);
+                            changed = true;
+                            save    = true;
+                        }
+                    }
+                    if (changed) {
+                        // Without this the toggle appears to do nothing
+                        // until the next launch, which reads as a broken
+                        // setting. Deferred, NOT applied here: see
+                        // RequestPerformSpellResolve for why writing
+                        // g_performSpell[] from a UI action is unsafe.
+                        Session::RequestPerformSpellResolve();
+                    }
+
+                    FUCK::TextDisabled(
+                        "Asking a follower to play together always goes to "
+                        "Skyrim's Got Talent, whatever you tick here.");
+                };
+
                 if (FUCK::BeginTabBar("##BardHeroSettings")) {
                     if (FUCK::BeginTabItem("General")) {
                         drawGeneral();
@@ -704,6 +830,10 @@ namespace SH {
                         InputHook::CancelBindCapture();
                         _bindArmedSlot = -1;
                     }
+                    if (FUCK::BeginTabItem("Instruments")) {
+                        drawInstruments();
+                        FUCK::EndTabItem();
+                    }
                     if (FUCK::BeginTabItem("Cheats")) {
                         drawCheats();
                         FUCK::EndTabItem();
@@ -711,7 +841,16 @@ namespace SH {
                     FUCK::EndTabBar();
                 }
 
-                if (save) { st.Save(); }
+                if (save) {
+                    st.Save();
+                    // The hook caches settings-derived state (binds, fret-
+                    // only, and the strum-grace window computed from the
+                    // Difficulty tab's strum leniency). Refresh on EVERY
+                    // save rather than per-widget: it is one cheap flag the
+                    // hook consumes at frame start, and a per-widget list
+                    // here is exactly the kind that silently goes stale.
+                    InputHook::RefreshBinds();
+                }
             }
 
         private:

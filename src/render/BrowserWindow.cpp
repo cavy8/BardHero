@@ -878,6 +878,48 @@ namespace SH {
                     // bar now, which is up in this state too.
                     FUCK::CenteredText(emptyLine, false);
 
+                    // The line a field report earned (2026-07-29): a charter
+                    // put working charts in the songs root, the scan FOUND
+                    // them, and this screen said only "no songs available" -
+                    // which reads as a broken scan and sent them hunting
+                    // through MO2 folders. An untagged chart is invisible
+                    // from every instrument's songbook, so if any exist,
+                    // SAY the scan saw them and why they are not here.
+                    int untagged = 0;
+                    for (const auto& s : *songs) {
+                        if (!songeligibility::TaggedInstrument(s.instrument)
+                                 .has_value()) {
+                            ++untagged;
+                        }
+                    }
+                    if (untagged > 0 &&
+                        songeligibility::IsBoundContext(_instrumentContext)) {
+                        char foundLine[160];
+                        std::snprintf(
+                            foundLine, sizeof(foundLine),
+                            "The scan did find %d song%s - hidden here "
+                            "because %s no instrument tag.",
+                            untagged, untagged == 1 ? "" : "s",
+                            untagged == 1 ? "it carries" : "they carry");
+                        FUCK::Dummy(ImVec2(0.0f, 10.0f * uiScale));
+                        FUCK::CenteredText(foundLine, false);
+                        if (_instrumentContext == songeligibility::kGuitar) {
+                            FUCK::CenteredText(
+                                "Move them into a folder named guitar and "
+                                "they count as guitar songs.",
+                                false);
+                        } else {
+                            char tagLine[120];
+                            std::snprintf(
+                                tagLine, sizeof(tagLine),
+                                "Add \"instrument = %.*s\" to each song.ini "
+                                "to show them here.",
+                                static_cast<int>(instrument.size()),
+                                instrument.data());
+                            FUCK::CenteredText(tagLine, false);
+                        }
+                    }
+
                     // An empty list is the ONE place a player is guaranteed
                     // to be looking when they need this, and BardHero ships
                     // no songs and downloads none - so without it the mod

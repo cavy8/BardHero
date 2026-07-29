@@ -45,6 +45,14 @@ stored in the record. A rule for I4 is the only lever there is. That rule
 ships with the Doom Lute component and does nothing whatsoever if I4 is not
 installed.
 
+And if you want the Doom Lute to carry a description on its inventory card:
+
+9. Description Framework
+
+Cosmetic again, optional again, and the same mechanism Skyrim's Got Talent
+uses to describe the vanilla lute, flute and drum. Without it the card simply
+has no description line, with no error and nothing in the log.
+
 The tested setup uses:
 
 - Skyrim AE 1.6.1170
@@ -93,6 +101,30 @@ a local Ogg Opus cache. This normally adds about half a second. Replays use
 the cache without converting again.
 
 Do not share the generated song.opus cache files.
+
+ADDING YOUR OWN SONGS
+
+Your own charts, and anything Bridge downloads, go here:
+
+  Documents\My Games\Skyrim Special Edition\Bard Hero Songs\guitar
+
+The "guitar" part is not decoration. A song's instrument decides which
+songbook shows it, and a chart gets one in exactly two ways: an
+"instrument = guitar" (or lute, flute, drum) line in its own song.ini, or
+by sitting anywhere inside a folder named "guitar". Ordinary Clone Hero
+charts carry no instrument line at all, so outside a guitar folder they are
+invisible from every instrument's songbook - the scan finds them, and the
+Songbook now says so and names this folder when that happens.
+
+No rescan needed: the folder is watched, and songs appear a couple of
+seconds after files stop changing.
+
+PLAYING A REAL GUITAR CONTROLLER
+
+A guitar that registers as an XInput controller works out of the box, with
+one setting: turn Gamepad Mode OFF (Settings -> Difficulty, or
+bGamepadMode=0 in the INI). Gamepad Mode makes fret presses strum by
+themselves - right for pad players, wrong for a real strum bar.
 
 PLAYTEST NOTES
 

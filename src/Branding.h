@@ -6,5 +6,5 @@ namespace SH {
     // sidebar, log lines, future FOMOD - reads this.
     inline constexpr const char* kDisplayName = "BardHero";
     // Keep in sync with CMakeLists project(VERSION) and vcpkg.json.
-    inline constexpr const char* kVersion = "1.1.0";
+    inline constexpr const char* kVersion = "1.2.0";
 }

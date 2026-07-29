@@ -30,10 +30,15 @@ namespace {
         Binds                    b;
         std::vector<MappedEvent> out;
         DiEvent                  buf[10]{};
+        bool                     fretsOnly = false;
+        // The engine-default strum leniency; tests that probe the window
+        // boundary rely on this value staying in step with EngineParams.
+        double                   grace     = 0.050;
 
         InputMapper::FeedStats Feed(std::uint32_t tgt = kT0,
                                     double qpc = kQ0, bool engaged = true) {
-            return m.Feed(buf, 10, tgt, qpc, b, engaged, out);
+            return m.Feed(buf, 10, tgt, qpc, b, engaged, fretsOnly, grace,
+                          out);
         }
         void Seed() {  // first call after construction seeds, emits nothing
             Feed();
@@ -757,6 +762,160 @@ static void TestHeldListNavigationRepeatsAfterDelay() {
     CHECK(repeat.Step(0, -1, 20.450) == -1);
 }
 
+// ---- fret-only (no strum) -----------------------------------------------
+// Keyboard twin of Gamepad Mode. Requested 2026-07-28 by two players who
+// could not press Space and a fret at the same time.
+
+static int CountStrums(const std::vector<MappedEvent>& out) {
+    int n = 0;
+    for (const auto& e : out) {
+        if (e.action == InputAction::kStrum) { ++n; }
+    }
+    return n;
+}
+
+static void TestFretsOnlyOffChangesNothing() {
+    Fix f;
+    f.Seed();
+    // Default off: a fret press is a fret press and nothing else, which is
+    // what protects every existing player from this feature.
+    f.buf[0] = Ev(f.b.fret[0], true, kT0, 1);
+    f.Feed();
+    CHECK(CountStrums(f.out) == 0);
+    CHECK(f.out.size() == 1);
+    CHECK(f.out[0].action == InputAction::kFret1);
+}
+
+static void TestFretsOnlyStrumsOncePerChord() {
+    Fix f;
+    f.fretsOnly = true;
+    f.Seed();
+    // THE case this feature lives or dies on: three frets pressed together
+    // arrive as three events in ONE buffer. Strumming per fret would make
+    // every chord overstrum itself twice.
+    f.buf[0] = Ev(f.b.fret[0], true, kT0, 1);
+    f.buf[1] = Ev(f.b.fret[1], true, kT0, 2);
+    f.buf[2] = Ev(f.b.fret[2], true, kT0, 3);
+    f.Feed();
+    CHECK(CountStrums(f.out) == 1);
+    // ...and it must land AFTER its own frets, or the engine judges the
+    // strum against a chord it has not been told about yet.
+    CHECK(f.out.size() == 4);
+    CHECK(f.out[3].action == InputAction::kStrum);
+
+    // A single fret still strums - the chord rule must not swallow the
+    // ordinary case. Beyond the grace window: within it, a press is a
+    // chord-join by design (TestFretsOnlyChordAcrossBatches pins that).
+    f.out.clear();
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[3], true, kT0 + 100, 4);
+    f.Feed(kT0 + 100, kQ0 + 0.100);
+    CHECK(CountStrums(f.out) == 1);
+}
+
+static void TestGamepadChordAcrossFramesStrumsOnce() {
+    GamepadBinds             b;
+    GamepadMapper            m;
+    std::vector<MappedEvent> out;
+    // The gamepad had the identical latent defect the keyboard field
+    // report exposed: two fret buttons pressed ~20ms apart land in
+    // different input frames, and each EndFrame emitted its own
+    // auto-strum. Second strum, pending first strum, overstrum.
+    m.FeedButton(b.fret[0], true, kQ0, b, true, true, out);
+    m.EndFrame(kQ0, b, true, true, out);
+    m.FeedButton(b.fret[1], true, kQ0 + 0.020, b, true, true, out);
+    m.EndFrame(kQ0 + 0.020, b, true, true, out);
+    int strums = 0;
+    for (const auto& e : out) {
+        if (e.action == InputAction::kStrum) { ++strums; }
+    }
+    CHECK(strums == 1);
+    // ...and past the window a new press strums again.
+    m.FeedButton(b.fret[0], false, kQ0 + 0.150, b, true, true, out);
+    m.FeedButton(b.fret[0], true, kQ0 + 0.200, b, true, true, out);
+    m.EndFrame(kQ0 + 0.200, b, true, true, out);
+    strums = 0;
+    for (const auto& e : out) {
+        if (e.action == InputAction::kStrum) { ++strums; }
+    }
+    CHECK(strums == 2);
+}
+
+static void TestFretsOnlyChordAcrossBatches() {
+    Fix f;
+    f.fretsOnly = true;
+    f.Seed();
+    // THE field case (2026-07-29, "sometimes when i press chords it
+    // overstrums"): a human chord spreads 20-100ms, so its presses land in
+    // DIFFERENT Feed batches. The engine holds the first strum pending for
+    // the strum-leniency window, and a second strum inside that window is
+    // an immediate overstrum - so the later presses must join the chord,
+    // not strum again.
+    f.buf[0] = Ev(f.b.fret[0], true, kT0, 1);
+    f.Feed();
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[1], true, kT0 + 20, 2);
+    f.Feed(kT0 + 20, kQ0 + 0.020);
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[2], true, kT0 + 40, 3);
+    f.Feed(kT0 + 40, kQ0 + 0.040);
+    CHECK(CountStrums(f.out) == 1);
+
+    // Once the pending window is over, a fresh press must strum again -
+    // the window must not become a permanent mute.
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[0], true, kT0 + 200, 4);
+    f.Feed(kT0 + 200, kQ0 + 0.200);
+    CHECK(CountStrums(f.out) == 2);
+}
+
+static void TestFretsOnlyManualStrumJoinsChord() {
+    Fix f;
+    f.fretsOnly = true;
+    f.Seed();
+    // "The strum key keeps working" has to mean working: strum the chord
+    // with Space and fret it a few ms later, and fret-only must not add a
+    // second strum on top of the manual one.
+    f.buf[0] = Ev(f.b.strum, true, kT0, 1);
+    f.Feed();
+    CHECK(CountStrums(f.out) == 1);
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[0], true, kT0 + 15, 2);
+    f.buf[1] = Ev(f.b.fret[1], true, kT0 + 18, 3);
+    f.Feed(kT0 + 18, kQ0 + 0.018);
+    CHECK(CountStrums(f.out) == 1);
+}
+
+static void TestFretsOnlyKeepsEventTimeAndIgnoresReleases() {
+    Fix f;
+    f.fretsOnly = true;
+    f.Seed();
+    // The auto-strum carries the FRET's own DI event time, not the frame
+    // time. Stamping it at frame time would throw away the sub-frame
+    // accuracy that is the entire reason this path reads the DI buffer,
+    // on the one input that decides whether a note scores.
+    f.buf[0] = Ev(f.b.fret[0], true, kT0 - 20, 1);
+    f.Feed(kT0, kQ0);
+    CHECK(CountStrums(f.out) == 1);
+    double fretAt = -1.0, strumAt = -2.0;
+    for (const auto& e : f.out) {
+        if (e.action == InputAction::kFret1) { fretAt = e.qpcSec; }
+        if (e.action == InputAction::kStrum) { strumAt = e.qpcSec; }
+    }
+    CHECK(strumAt == fretAt);
+    CHECK(strumAt < kQ0);  // event time, genuinely before frame time
+
+    // Releases must NOT strum. Letting go of a chord at the end of a
+    // sustain would otherwise fire a strum into empty air - the same
+    // mistake the strum key itself made in the 2026-07-18 field run
+    // (36 overstrums vs 31 hits).
+    f.out.clear();
+    for (auto& e : f.buf) { e = DiEvent{}; }
+    f.buf[0] = Ev(f.b.fret[0], false, kT0 + 30, 2);
+    f.Feed(kT0 + 30, kQ0 + 0.030);
+    CHECK(CountStrums(f.out) == 0);
+}
+
 static void RunTests() {
     TestSeedSwallowsPreexisting();
     TestGarbageNeverPoisons();
@@ -792,6 +951,12 @@ static void RunTests() {
     TestListNavigationWrapsBothWays();
     TestSongbookDifficultyStepsAndClamps();
     TestHeldListNavigationRepeatsAfterDelay();
+    TestFretsOnlyOffChangesNothing();
+    TestFretsOnlyStrumsOncePerChord();
+    TestFretsOnlyKeepsEventTimeAndIgnoresReleases();
+    TestFretsOnlyChordAcrossBatches();
+    TestFretsOnlyManualStrumJoinsChord();
+    TestGamepadChordAcrossFramesStrumsOnce();
 }
 
 TEST_MAIN("InputMapper")

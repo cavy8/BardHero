@@ -58,5 +58,36 @@ namespace SH {
         // killed the performance in the same millisecond it started, and
         // the player never played the lute (field 2026-07-20).
         static bool IsSelfAddInFlight();
+
+        // Re-read the four sPerformSpell* settings and their bHandle*
+        // switches into g_performSpell[]. Game thread only (it does
+        // TESDataHandler lookups). Called at kDataLoaded from Install(), and
+        // again from the settings tool so a toggle takes effect without a
+        // restart - a setting that needs a relaunch reads as a broken
+        // setting.
+        static void ResolvePerformSpells();
+
+        // Ask for a re-resolve at the next safe moment. The settings tool
+        // calls THIS, never ResolvePerformSpells directly: g_performSpell[]
+        // is re-read live by the keeper pass, the end-strip and the payout
+        // tail, so overwriting it mid-session silently kills the idle
+        // keep-alive and can cancel a finished song's payout.
+        static void RequestPerformSpellResolve();
+
+        // Has the player asked a follower to play together? Reads SGT's
+        // _Talent_FollowerPlays global, resolved once at kDataLoaded.
+        // False when SGT is absent or the global did not resolve.
+        //
+        // A raw sample with no edge detection of its own, and SGT RESETS the
+        // flag to 0 as its own duet clip starts - so this only means what its
+        // name says when read BEFORE that point. The AddTarget hook satisfies
+        // that by construction: it is synchronous and native, ahead of the
+        // Papyrus dispatch that would consume the flag.
+        static bool DuetPending();
+
+        // The hook stood down for a duet and did NOT strip, so the ability
+        // stays on the player. Latch it, or the 500ms poll sees a fresh
+        // present bit and opens the songbook on top of SGT's duet.
+        static void NoteDuetPassthrough(RE::FormID a_id);
     };
 }

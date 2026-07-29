@@ -98,6 +98,16 @@ if (-not (Test-Path -LiteralPath $esp)) {
 }
 Copy-Item -LiteralPath $esp -Destination $luteRoot
 
+# Description Framework gives the lute its inventory description, the same
+# way SGT describes the vanilla instruments. Scoped to the optional component
+# because it names the plugin: shipping it in core would describe a record
+# that does not exist for anyone who declined the guitar.
+$desc = Join-Path $ElectricRoot "Data\Bard Hero - Doom Lute_DESC.ini"
+if (-not (Test-Path -LiteralPath $desc)) {
+    throw "Doom Lute description missing: $desc"
+}
+Copy-Item -LiteralPath $desc -Destination $luteRoot
+
 foreach ($dir in @("meshes", "textures")) {
     Copy-Item -LiteralPath (Join-Path $ElectricRoot "Data\$dir") `
         -Destination $luteRoot -Recurse
@@ -164,6 +174,7 @@ $mustExist = @{
     "core\SKSE\Plugins\BardHero\highway"        = "the highway atlas"
     "core\SKSE\Plugins\BardHero\sfx\ui"         = "UI sounds (omitted from every package until 2026-07-27)"
     "optional\doomlute\Bard Hero - Doom Lute.esp" = "the Doom Lute plugin"
+    "optional\doomlute\Bard Hero - Doom Lute_DESC.ini" = "the Doom Lute description"
 }
 foreach ($rel in $mustExist.Keys) {
     if (-not (Test-Path -LiteralPath (Join-Path $stageRoot $rel))) {
@@ -173,6 +184,26 @@ foreach ($rel in $mustExist.Keys) {
 $uiSounds = (Get-ChildItem -LiteralPath (Join-Path $stageRoot "core\SKSE\Plugins\BardHero\sfx\ui") -File -Filter *.wav).Count
 if ($uiSounds -lt 1) { throw "sfx\ui exists but contains no sounds" }
 Write-Output "  staged $uiSounds UI sounds"
+
+# ---- 4a2. does the INSTALLER actually install what we staged? ------------
+# The check above proves a file reached the staging folder. It does NOT prove
+# the player ever gets it: ModuleConfig.xml's <files> block is a strict
+# whitelist with no wildcard, so a loose file at the root of a component that
+# nobody listed is zipped up and then silently ignored at install time.
+#
+# Found the hard way on 2026-07-29, when the Doom Lute description staged
+# fine, passed $mustExist, and would have shipped completely inert. Folders
+# are covered by <folder> entries and need no per-file listing; only loose
+# files at a component root do.
+$moduleConfig = Get-Content -LiteralPath (Join-Path $PSScriptRoot "..\fomod\ModuleConfig.xml") -Raw
+foreach ($loose in Get-ChildItem -LiteralPath (Join-Path $stageRoot "optional\doomlute") -File) {
+    $src = "optional\doomlute\$($loose.Name)"
+    if ($moduleConfig -notlike "*source=""$src""*") {
+        throw ("Staged but never installed: $src is not listed in " +
+            "fomod\ModuleConfig.xml, so the FOMOD would ship it and the " +
+            "installer would ignore it. Add a <file source=""$src"" ...> entry.")
+    }
+}
 
 # ---- 4b. rewrite VERSION.txt --------------------------------------------
 # The inner packager was handed a synthetic version ("fomod-src-...") so its

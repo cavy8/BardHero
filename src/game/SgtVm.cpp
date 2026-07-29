@@ -191,6 +191,30 @@ namespace SH::SgtVm {
         // does not end it; accepted != transitioned.
         RE::BSFixedString g_stopIdleEvent{};
 
+        // Read IdleStop_Loose off a bound perform-effect script object and
+        // keep its anim event. Once per process; every later call is free.
+        // Shared by the keeper (its pass has the object anyway) and by the
+        // abort strip, where it is the LAST read before RemoveSpell makes
+        // the effect unfindable - a fast quit used to reach the pose
+        // release with nothing cached, and the release's own log line said
+        // so ("stop idle never cached") while the player stood playing a
+        // lute that nothing would ever stop.
+        void CacheStopIdleFrom(
+            const RE::BSTSmartPointer<RE::BSScript::Object>& a_obj) {
+            if (!g_stopIdleEvent.empty() || !a_obj) { return; }
+            auto* stopProp = a_obj->GetProperty("IdleStop_Loose");
+            if (!stopProp) { return; }
+            if (auto stopObj = stopProp->GetObject()) {
+                if (auto* stopIdle = static_cast<RE::TESIdleForm*>(
+                        stopObj->Resolve(static_cast<RE::VMTypeID>(
+                            RE::FormType::Idle)))) {
+                    g_stopIdleEvent = stopIdle->animEventName;
+                    spdlog::info("[sgt] stop idle cached ({})",
+                                 g_stopIdleEvent.c_str());
+                }
+            }
+        }
+
         // _Talent_EnableMovement (SGT global, local 0x0289A6 - read out of
         // SkyrimsGotTalent-Bards.esp; the same parse reproduces the three
         // known-good expertise globals 0x000D62/61/63, so it is trusted).
@@ -223,6 +247,18 @@ namespace SH::SgtVm {
         bool               g_luteAnimModelSaved   = false;
         bool               g_guitarAnimOverride   = false;
         bool               g_luteAnimObjectWarned = false;
+        // No "Meshes\" prefix: ANIO model paths are stored relative to it.
+        // This constant carried the prefix until the field log of
+        // 2026-07-29 printed the record's real value on restore
+        // ("AnimObjectLute model restored to AnimObjects\AnimObjectLute.nif")
+        // and settled it. Only the never-captured fallback reads this, which
+        // is why a wrong value could sit here unnoticed.
+        constexpr const char* kVanillaLuteAnimModel =
+            "AnimObjects\\AnimObjectLute.nif";
+        // Every prop model we ever write onto the shared record lives under
+        // this folder, so one substring test recognises all of them - guitar,
+        // bass, rhythm, and anything added later.
+        constexpr std::string_view kOurPropFolder = "BardHeroElectric";
 
         // Electric player-perform signal (band-animation session request
         // 2026-07-25): the "Player Guitar" OAR submod conditions the
@@ -600,20 +636,7 @@ namespace SH::SgtVm {
         // Cache SGT's exit idle while its script object is still reachable.
         // Done on every pass but only resolved once: the effect is dispelled
         // before we release the pose, so this is the last chance to read it.
-        if (!g_stopIdleEvent.empty()) {
-            // already cached
-        } else if (auto* stopProp = obj->GetProperty("IdleStop_Loose");
-                   stopProp) {
-            if (auto stopObj = stopProp->GetObject()) {
-                if (auto* stopIdle = static_cast<RE::TESIdleForm*>(
-                        stopObj->Resolve(static_cast<RE::VMTypeID>(
-                            RE::FormType::Idle)))) {
-                    g_stopIdleEvent = stopIdle->animEventName;
-                    spdlog::info("[sgt] stop idle cached ({})",
-                                 g_stopIdleEvent.c_str());
-                }
-            }
-        }
+        CacheStopIdleFrom(obj);
         if (a_keepIdle) {
             auto* pc     = RE::PlayerCharacter::GetSingleton();
             bool  idling = false;
@@ -1229,6 +1252,47 @@ namespace SH::SgtVm {
         g_moveOrig = -1.0f;
     }
 
+    // Capture the shared AnimObjectLute model as the GAME shipped it, once,
+    // and never from a value we might have written ourselves.
+    //
+    // ⚠ THIS IS A POISONED-BASELINE GUARD, and the bug it fixes was field-
+    // reported on 2026-07-29 as "sometimes we can still get the bass
+    // guitar". The capture used to be lazy: the first time the guitar
+    // override armed, it saved whatever the record happened to hold right
+    // then. But the BAND writes this same record too (BandStage.cpp swaps it
+    // to BassAnimObject.nif and GuitarAnimObject.nif for its performers). Run
+    // a band before the override first arms, and the "original" captured IS
+    // the bass - after which every restore puts the bass back on the shared
+    // record, for our lute sets AND for every vanilla NPC bard, for the rest
+    // of the process. It survives ending the song, because the restore is
+    // faithfully restoring exactly what it was told was vanilla.
+    //
+    // Rejecting our own models is what makes this safe no matter WHO ran
+    // first, which a "capture earlier" fix alone would not guarantee.
+    void SaveLuteAnimBaseline() {
+        if (g_luteAnimModelSaved) { return; }
+        if (!g_luteAnimObject) {
+            g_luteAnimObject =
+                RE::TESForm::LookupByID<RE::TESObjectANIO>(
+                    kLuteAnimObjectId);
+        }
+        if (!g_luteAnimObject) { return; }
+        const char*      raw = g_luteAnimObject->GetModel();
+        std::string_view model = raw ? raw : "";
+        if (model.empty() ||
+            model.find(kOurPropFolder) != std::string_view::npos) {
+            g_luteAnimOriginalModel = kVanillaLuteAnimModel;
+            spdlog::warn(
+                "[guitar] AnimObjectLute already held '{}' when the baseline "
+                "was captured - that is one of ours, not vanilla; baseline "
+                "forced to {}",
+                model.empty() ? "(none)" : model, kVanillaLuteAnimModel);
+        } else {
+            g_luteAnimOriginalModel = model;
+        }
+        g_luteAnimModelSaved = true;
+    }
+
     void SetGuitarAnimObjectOverride(bool a_enabled) {
         if (!g_luteAnimObject) {
             g_luteAnimObject =
@@ -1248,12 +1312,7 @@ namespace SH::SgtVm {
 
         if (a_enabled) {
             if (g_guitarAnimOverride) { return; }
-            if (!g_luteAnimModelSaved) {
-                const char* original = g_luteAnimObject->GetModel();
-                g_luteAnimOriginalModel =
-                    original ? original : "";
-                g_luteAnimModelSaved = true;
-            }
+            SaveLuteAnimBaseline();
             g_luteAnimObject->SetModel(
                 guitarprop::kAnimationObjectModel.data());
             // BEFORE SGT's PlayIdle fires (same guarantee as the model
@@ -1293,7 +1352,7 @@ namespace SH::SgtVm {
         const char* model =
             g_guitarAnimOverride ? guitarprop::kAnimationObjectModel.data()
             : g_luteAnimModelSaved ? g_luteAnimOriginalModel.c_str()
-                                   : "Meshes\\AnimObjects\\AnimObjectLute.nif";
+                                   : kVanillaLuteAnimModel;
         g_luteAnimObject->SetModel(model);
         spdlog::info("[band] AnimObjectLute baseline reasserted ({})",
                      model);
@@ -1301,6 +1360,14 @@ namespace SH::SgtVm {
 
     void ClearElectricPerformGlobal() {
         WriteElectricPerformGlobal(0.0f);
+    }
+
+    void CaptureAnimObjectBaseline() { SaveLuteAnimBaseline(); }
+
+    void TryCacheStopIdle(RE::FormID a_spellId) {
+        auto* effect = FindPerformEffect(a_spellId);
+        if (!effect) { return; }
+        CacheStopIdleFrom(ScriptObject(effect));
     }
 
     void ReleasePerformPose() {

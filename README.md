@@ -24,7 +24,8 @@ Atronach Forge, with a spectral skeleton band that plays behind you.
 
 ## Requirements
 
-- Skyrim Special Edition / Anniversary Edition 1.6.1170
+- Skyrim Special Edition 1.5.97, or Anniversary Edition 1.6.317 up to
+  1.6.1170
 - [SKSE64](https://skse.silverlock.org/)
 - Skyrim's Got Talent
 - FLICK (Fuzz's Legally Intelligible Core Kit)

@@ -6,6 +6,7 @@
 #include "Settings.h"
 #include "audio/AudioEngine.h"
 #include "game/AutoPlayBot.h"
+#include "game/DifficultyTuning.h"
 #include "game/EngineFeed.h"
 #include "game/InputMapper.h"
 #include "game/PauseInputLogic.h"
@@ -63,6 +64,16 @@ namespace SH {
         GamepadBinds             g_padBinds;  // set once at Install
         bool                     g_controllerEnabled = true;
         bool                     g_gamepadMode       = true;
+        // Keyboard twin of gamepad mode: a fret press strums by itself.
+        // Refreshed by RefreshBinds so the settings toggle is live.
+        bool                     g_fretsOnly         = false;
+        // The chord-join window for both mappers' auto-strum, and it must
+        // EQUAL the engine's live strum leniency: shorter re-strums into a
+        // pending strum (immediate overstrum), longer suppresses when
+        // nothing is pending. RefreshBinds computes it through the same
+        // difficulty::EngineParamsFor the session uses, so the two windows
+        // cannot drift.
+        double                   g_strumGraceSec     = 0.050;
         // Isolation kill-switch, set once at Install from
         // Settings::hookNeverFilter. When true, DispatchHook::thunk short-
         // circuits to a pure pass-through and never touches the engine's
@@ -352,7 +363,8 @@ namespace SH {
                 !feed.clock->Paused();
             g_events.clear();
             const auto st = g_mapper.Feed(buf, kDiBufferLen, tgtNow, qpcNow,
-                                          g_binds, feeding, g_events);
+                                          g_binds, feeding, g_fretsOnly,
+                                          g_strumGraceSec, g_events);
             if (a_events) {
                 for (auto* e = *a_events; e; e = e->next) {
                     if (e->GetDevice() != RE::INPUT_DEVICE::kKeyboard ||
@@ -418,7 +430,8 @@ namespace SH {
             }
             if (g_controllerEnabled) {
                 g_padMapper.EndFrame(qpcNow, g_padBinds, feeding,
-                                     g_gamepadMode, g_events);
+                                     g_gamepadMode, g_events,
+                                     g_strumGraceSec);
             }
             g_wasFeeding = feeding;
             feed.heldFrets.store(
@@ -1118,6 +1131,9 @@ namespace SH {
             g_binds.pause2   = st.pauseKey2;
             g_controllerEnabled = st.controllerEnabled;
             g_gamepadMode       = st.gamepadMode;
+            g_fretsOnly         = st.fretsOnly;
+            g_strumGraceSec =
+                difficulty::EngineParamsFor(st.tuning).strumLeniency;
             g_padBinds.fret[0]  = st.gamepadFret1;
             g_padBinds.fret[1]  = st.gamepadFret2;
             g_padBinds.fret[2]  = st.gamepadFret3;

@@ -22,21 +22,29 @@ Atronach Forge, with a spectral skeleton band that plays behind you.
 - Reads standard Clone Hero charts (.chart, .mid, song.ini), so you can
   drop in your own songs
 - Single-theme UI customization through `Data/SKSE/Plugins/BardHero/theme.ini`
+- Live theme editing and preview through FLICK
 
 ## Themes
 
-BardHero currently loads one theme from
-`Data/SKSE/Plugins/BardHero/theme.ini`. The theme intentionally exposes a
-small set of high-impact choices rather than every ImGui/style value:
-BardHero panel colors and rounding, the core gameplay palette (all five
-frets, open notes, misses and Star Power), and an optional highway image.
-FLICK remains responsible for its own host/sidebar chrome.
+BardHero currently uses one theme from
+`Data/SKSE/Plugins/BardHero/theme.ini`. The same theme is editable in-game
+through FLICK's **Bard Hero Theme** tool. Changes to menu colors, geometry,
+fret/gameplay colors and highway tint apply immediately and are saved back
+to `theme.ini` automatically. The editor includes live previews for BardHero
+menu surfaces, the five-fret gameplay palette and the perspective highway.
+
+The theme intentionally exposes a small set of high-impact choices rather
+than every ImGui/style value: BardHero panel colors and rounding, the core
+gameplay palette (all five frets, open notes, misses and Star Power), and an
+optional highway image. FLICK remains responsible for its own host/sidebar
+chrome.
 
 Highway artwork follows the Clone Hero convention: use a 1:2 width:height
 image such as 512x1024 or 1024x2048. The image is mapped onto BardHero's
-perspective highway with FLICK's image-quad API. The shipped `theme.ini`
-contains the default palette and comments for every supported option.
-Restart Skyrim after changing the theme file.
+perspective highway with FLICK's image-quad API. Changing the image path is
+committed when the path field is finished (or when **Save now** is pressed),
+then the texture is released/reloaded without restarting Skyrim. Manual
+`theme.ini` edits can be picked up with **Reload from file**.
 
 ## Requirements
 

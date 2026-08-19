@@ -28,6 +28,17 @@ namespace SH::theme {
         ImVec4 highwayBackgroundTint{ 1, 1, 1, 1 };
         ImVec4 highwaySurface{ 0.05f, 0.05f, 0.09f, 1 };
         ImVec4 highwayRail{ 0.55f, 0.75f, 0.95f, 1 };
+
+        ImVec4 fret[5] = {
+            { 0.22f, 0.80f, 0.28f, 1.0f },
+            { 0.90f, 0.22f, 0.20f, 1.0f },
+            { 0.95f, 0.83f, 0.18f, 1.0f },
+            { 0.25f, 0.55f, 0.95f, 1.0f },
+            { 0.95f, 0.55f, 0.15f, 1.0f },
+        };
+        ImVec4 openNote{ 0.72f, 0.40f, 0.95f, 1.0f };
+        ImVec4 miss{ 0.45f, 0.45f, 0.45f, 0.85f };
+        ImVec4 starPower{ 0.10f, 0.92f, 1.00f, 1.0f };
     };
 
     inline ImVec4 Mix(const ImVec4& a, const ImVec4& b, float t) {
@@ -87,10 +98,20 @@ namespace SH::theme {
             t.rounding = static_cast<float>(std::clamp(ini.GetDoubleValue("Menu","fRounding",t.rounding),0.0,32.0));
             t.shadowOffset = static_cast<float>(std::clamp(ini.GetDoubleValue("Menu","fShadowOffset",t.shadowOffset),0.0,24.0));
             t.innerBorder = ini.GetBoolValue("Menu","bInnerBorder",t.innerBorder);
+
             if (const char* bg = ini.GetValue("Highway","sBackground",nullptr)) t.highwayBackground = Trim(bg);
             t.highwayBackgroundTint = ReadColor(ini,"Highway","BackgroundTint",t.highwayBackgroundTint);
             t.highwaySurface = ReadColor(ini,"Highway","Surface",t.highwaySurface);
             t.highwayRail = ReadColor(ini,"Highway","Rail",t.highwayRail);
+
+            t.fret[0] = ReadColor(ini,"Gameplay","FretGreen",t.fret[0]);
+            t.fret[1] = ReadColor(ini,"Gameplay","FretRed",t.fret[1]);
+            t.fret[2] = ReadColor(ini,"Gameplay","FretYellow",t.fret[2]);
+            t.fret[3] = ReadColor(ini,"Gameplay","FretBlue",t.fret[3]);
+            t.fret[4] = ReadColor(ini,"Gameplay","FretOrange",t.fret[4]);
+            t.openNote = ReadColor(ini,"Gameplay","OpenNote",t.openNote);
+            t.miss = ReadColor(ini,"Gameplay","Miss",t.miss);
+            t.starPower = ReadColor(ini,"Gameplay","StarPower",t.starPower);
             return t;
         }
     }

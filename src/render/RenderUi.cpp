@@ -12,6 +12,7 @@
 #include "render/ResultsWindow.h"
 #include "render/SettingsTool.h"
 #include "render/Theme.h"
+#include "render/ThemeTool.h"
 #include "render/FlickWindowPolicy.h"
 
 #include <SimpleIni.h>  // CSimpleIniA, referenced by FUCK_API.h (house ordering)
@@ -29,22 +30,16 @@ namespace SH::RenderUi {
             return { c.x, c.y, c.z, c.w };
         }
 
-        void ApplyTheme() {
-            const auto& t = theme::Get();
-            panel::ApplyTheme(t);
-            for (int i = 0; i < 5; ++i) hw::kLaneColors[i] = ToRgba(t.fret[i]);
-            hw::kOpenColor    = ToRgba(t.openNote);
-            hw::kMissGrey     = ToRgba(t.miss);
-            hw::kSpActiveCyan = ToRgba(t.starPower);
-        }
-
         class ThemeHighwayBackground final : public FUCK::IWindow {
         public:
             const char* Id() const override { return "ThemeHighwayBackground"; }
-            const char* Title() const override { return "BardHero Highway Background"; }
+            const char* Title() const override {
+                return "BardHero Highway Background";
+            }
             bool IsOpen() const override {
                 return !theme::Get().highwayBackground.empty() &&
-                       EngineFeed::GetSingleton().active.load(std::memory_order_acquire);
+                       EngineFeed::GetSingleton().active.load(
+                           std::memory_order_acquire);
             }
             void SetOpen(bool) override {}
             void Draw() override {}
@@ -62,24 +57,46 @@ namespace SH::RenderUi {
                     static_cast<unsigned>(F::kRenderDuringTM),
                     static_cast<unsigned>(F::kCloseOnGameMenu)));
             }
+
+            void Refresh() {
+                if (_image) {
+                    if (auto* i = FUCK::GetInterface()) i->ReleaseImage(_image);
+                }
+                _image = nullptr;
+                _attempted = false;
+                _loadedPath.clear();
+            }
+
             void RenderOverlay() override {
                 const auto& t = theme::Get();
                 if (t.highwayBackground.empty()) return;
                 auto* i = FUCK::GetInterface();
                 if (!i) return;
+
+                // If a caller changed the mutable path but forgot to request
+                // an explicit refresh, fail safe by noticing it here. The
+                // editor normally refreshes on field commit, so this branch
+                // costs only a string compare per rendered frame.
+                if (_loadedPath != t.highwayBackground) Refresh();
+
                 if (!_image && !_attempted) {
                     _attempted = true;
+                    _loadedPath = t.highwayBackground;
                     _image = i->LoadImage(t.highwayBackground.c_str(), false);
                     if (!_image) {
-                        spdlog::warn("[theme] highway background could not be loaded: {}",
-                                     t.highwayBackground);
+                        spdlog::warn(
+                            "[theme] highway background could not be loaded: {}",
+                            t.highwayBackground);
                         return;
                     }
                     float w = 0.0f, h = 0.0f;
                     i->GetImageInfo(_image, &w, &h);
-                    if (w > 0.0f && h > 0.0f && std::abs(w / h - 0.5f) > 0.01f) {
-                        spdlog::warn("[theme] highway background is {:.0f}x{:.0f}; Clone Hero standard is 1:2",
-                                     w, h);
+                    if (w > 0.0f && h > 0.0f &&
+                        std::abs(w / h - 0.5f) > 0.01f) {
+                        spdlog::warn(
+                            "[theme] highway background is {:.0f}x{:.0f}; "
+                            "Clone Hero standard is 1:2",
+                            w, h);
                     }
                 }
                 if (!_image) return;
@@ -89,24 +106,43 @@ namespace SH::RenderUi {
                 const hw::View v{ disp.x, disp.y };
                 const hw::Style st = hw::Style::Default();
                 const float cx = v.w * 0.5f;
-                const ImVec2 p0(cx - hw::HalfWOf(st, v, 1.0f), hw::YOf(st, v, 1.0f));
-                const ImVec2 p1(cx + hw::HalfWOf(st, v, 1.0f), hw::YOf(st, v, 1.0f));
-                const ImVec2 p2(cx + hw::HalfWOf(st, v, 0.0f), hw::YOf(st, v, 0.0f));
-                const ImVec2 p3(cx - hw::HalfWOf(st, v, 0.0f), hw::YOf(st, v, 0.0f));
-                i->DrawImageQuad(_image, p0, p1, p2, p3,
-                                 ImVec2(0,0), ImVec2(1,0), ImVec2(1,1), ImVec2(0,1),
-                                 t.highwayBackgroundTint);
+                const ImVec2 p0(cx - hw::HalfWOf(st, v, 1.0f),
+                                hw::YOf(st, v, 1.0f));
+                const ImVec2 p1(cx + hw::HalfWOf(st, v, 1.0f),
+                                hw::YOf(st, v, 1.0f));
+                const ImVec2 p2(cx + hw::HalfWOf(st, v, 0.0f),
+                                hw::YOf(st, v, 0.0f));
+                const ImVec2 p3(cx - hw::HalfWOf(st, v, 0.0f),
+                                hw::YOf(st, v, 0.0f));
+                i->DrawImageQuad(
+                    _image, p0, p1, p2, p3,
+                    ImVec2(0,0), ImVec2(1,0), ImVec2(1,1), ImVec2(0,1),
+                    t.highwayBackgroundTint);
             }
+
         private:
             void* _image = nullptr;
             bool _attempted = false;
+            std::string _loadedPath;
         };
 
         ThemeHighwayBackground g_themeHighwayBackground;
     }
 
+    void ApplyTheme(bool reloadHighwayImage) {
+        const auto& t = theme::Get();
+        panel::ApplyTheme(t);
+        for (int i = 0; i < 5; ++i) {
+            hw::kLaneColors[i] = ToRgba(t.fret[i]);
+        }
+        hw::kOpenColor    = ToRgba(t.openNote);
+        hw::kMissGrey     = ToRgba(t.miss);
+        hw::kSpActiveCyan = ToRgba(t.starPower);
+        if (reloadHighwayImage) g_themeHighwayBackground.Refresh();
+    }
+
     void Register() {
-        ApplyTheme();
+        ApplyTheme(true);
         // Register the background first so FLICK composites the existing
         // highway surface/gems above it.
         FUCK::RegisterWindow(&g_themeHighwayBackground);
@@ -116,8 +152,11 @@ namespace SH::RenderUi {
         RegisterBrowserWindow();
         RegisterPauseMenuWindow();
         RegisterSettingsTool();
-        spdlog::info("[render] M4 windows registered (theme={}, results kPassInputToGame=ON).",
-                     theme::kThemeIniPath);
+        RegisterThemeTool();
+        spdlog::info(
+            "[render] M4 windows registered (theme={}, live editor=ON, "
+            "results kPassInputToGame=ON).",
+            theme::kThemeIniPath);
     }
 
     void AcquireCursor() {

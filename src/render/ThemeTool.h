@@ -27,6 +27,7 @@ namespace SH {
                 SyncBackgroundBuffer();
                 RefreshPreviewImage();
                 _dirty = false;
+                _backgroundEditingDirty = false;
                 _saveFailed = false;
             }
 
@@ -53,6 +54,7 @@ namespace SH {
                     RenderUi::ApplyTheme(true);
                     RefreshPreviewImage();
                     _dirty = false;
+                    _backgroundEditingDirty = false;
                     _saveFailed = false;
                 }
                 FUCK::SameLine();
@@ -61,14 +63,15 @@ namespace SH {
                     SyncBackgroundBuffer();
                     RenderUi::ApplyTheme(true);
                     RefreshPreviewImage();
+                    _backgroundEditingDirty = false;
                     QueueSave();
                 }
                 if (_saveFailed) {
                     FUCK::TextColored(
                         ImVec4(0.95f, 0.35f, 0.30f, 1.0f),
                         "Could not save theme.ini; check the log/path permissions.");
-                } else if (_dirty) {
-                    FUCK::TextDisabled("Saving changes...");
+                } else if (_dirty || _backgroundEditingDirty) {
+                    FUCK::TextDisabled("Unsaved theme changes.");
                 } else {
                     FUCK::TextDisabled("Theme saved.");
                 }
@@ -105,11 +108,23 @@ namespace SH {
                 QueueSave();
             }
 
+            void CommitBackgroundPath() {
+                if (!_backgroundEditingDirty) return;
+                theme::Mutable().highwayBackground = _backgroundPath;
+                _backgroundEditingDirty = false;
+                RenderUi::ApplyTheme(true);
+                RefreshPreviewImage();
+                QueueSave();
+            }
+
             void MaybeSave() {
                 if (_dirty && FUCK::GetTime() >= _saveAt) SaveNow();
             }
 
             void SaveNow() {
+                // Clicking Save or closing FLICK is also a field commit, so a
+                // path typed without tabbing away is never silently lost.
+                CommitBackgroundPath();
                 if (!_dirty) return;
                 _saveFailed = !theme::Save();
                 _dirty = _saveFailed;
@@ -122,8 +137,11 @@ namespace SH {
             }
 
             void ReleasePreviewImage() {
-                if (!_previewImage) return;
-                if (auto* i = FUCK::GetInterface()) i->ReleaseImage(_previewImage);
+                if (_previewImage) {
+                    if (auto* i = FUCK::GetInterface()) {
+                        i->ReleaseImage(_previewImage);
+                    }
+                }
                 _previewImage = nullptr;
                 _previewPath.clear();
                 _previewAttempted = false;
@@ -142,11 +160,6 @@ namespace SH {
                 if (_previewImage) {
                     i->GetImageInfo(_previewImage, &_previewW, &_previewH);
                 }
-            }
-
-            void EnsurePreviewImage() {
-                const auto& path = theme::Get().highwayBackground;
-                if (path != _previewPath) RefreshPreviewImage();
             }
 
             void DrawMenuEditor() {
@@ -204,18 +217,16 @@ namespace SH {
                 auto& t = theme::Mutable();
 
                 FUCK::SeparatorText("Background image");
-                const bool pathEdited = FUCK::InputText(
-                    "Image path", _backgroundPath, sizeof(_backgroundPath));
-                if (pathEdited) {
-                    t.highwayBackground = _backgroundPath;
-                    QueueSave();
+                if (FUCK::InputText(
+                        "Image path", _backgroundPath,
+                        sizeof(_backgroundPath))) {
+                    _backgroundEditingDirty = true;
                 }
-                // Avoid disk/image churn on every typed character. The live
-                // path is committed as soon as the user leaves the field or
-                // presses Enter; tint still updates continuously below.
+                // Loading half-typed filenames through FLICK every keypress
+                // is both noisy and expensive. Commit as soon as the edit is
+                // finished; every color/geometry control remains truly live.
                 if (FUCK::IsItemDeactivatedAfterEdit()) {
-                    RenderUi::ApplyTheme(true);
-                    RefreshPreviewImage();
+                    CommitBackgroundPath();
                 }
                 FUCK::TextDisabled(
                     "Clone Hero standard is 1:2 width:height, e.g. "
@@ -226,13 +237,14 @@ namespace SH {
                 }
 
                 if (FUCK::Button("Reload background image")) {
-                    t.highwayBackground = _backgroundPath;
-                    RenderUi::ApplyTheme(true);
-                    RefreshPreviewImage();
-                    QueueSave();
+                    if (_backgroundEditingDirty) {
+                        CommitBackgroundPath();
+                    } else {
+                        RenderUi::ApplyTheme(true);
+                        RefreshPreviewImage();
+                    }
                 }
 
-                EnsurePreviewImage();
                 if (t.highwayBackground.empty()) {
                     FUCK::TextDisabled("No custom highway image selected.");
                 } else if (!_previewImage && _previewAttempted) {
@@ -240,7 +252,8 @@ namespace SH {
                         t.miss,
                         "Image could not be loaded. The current path is kept.");
                 } else if (_previewImage) {
-                    const bool aspectOk = _previewW > 0.0f && _previewH > 0.0f &&
+                    const bool aspectOk =
+                        _previewW > 0.0f && _previewH > 0.0f &&
                         std::abs(_previewW / _previewH - 0.5f) <= 0.01f;
                     if (aspectOk) {
                         FUCK::TextDisabled("Loaded %.0fx%.0f (1:2)",
@@ -262,8 +275,8 @@ namespace SH {
                 const float s = FUCK::Scale(1.0f);
                 const ImVec2 origin = FUCK::GetCursorScreenPos();
                 const float width = std::max(
-                    260.0f * s,
-                    std::min(FUCK::GetContentRegionAvail().x, 560.0f * s));
+                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
+                                   560.0f * s));
                 const float height = 150.0f * s;
                 const ImVec2 hi(origin.x + width, origin.y + height);
 
@@ -296,18 +309,20 @@ namespace SH {
                 const float s = FUCK::Scale(1.0f);
                 const ImVec2 origin = FUCK::GetCursorScreenPos();
                 const float width = std::max(
-                    280.0f * s,
-                    std::min(FUCK::GetContentRegionAvail().x, 560.0f * s));
+                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
+                                   560.0f * s));
                 const float height = 175.0f * s;
                 const ImVec2 hi(origin.x + width, origin.y + height);
 
-                const ImVec4 bg = theme::Mix(t.panel, ImVec4(0,0,0,1), 0.30f);
-                FUCK::DrawRectFilled(origin, hi, bg, t.rounding * s * 0.5f);
-                FUCK::DrawRect(origin, hi, t.border, t.rounding * s * 0.5f,
-                               s);
+                const ImVec4 bg = theme::Mix(
+                    t.panel, ImVec4(0,0,0,1), 0.30f);
+                FUCK::DrawRectFilled(origin, hi, bg,
+                                     t.rounding * s * 0.5f);
+                FUCK::DrawRect(origin, hi, t.border,
+                               t.rounding * s * 0.5f, s);
 
                 auto* i = FUCK::GetInterface();
-                if (i) {
+                if (i && width > 120.0f * s) {
                     const float y = origin.y + 73.0f * s;
                     const float left = origin.x + 48.0f * s;
                     const float right = hi.x - 48.0f * s;
@@ -343,8 +358,8 @@ namespace SH {
                 const float s = FUCK::Scale(1.0f);
                 const ImVec2 origin = FUCK::GetCursorScreenPos();
                 const float width = std::max(
-                    300.0f * s,
-                    std::min(FUCK::GetContentRegionAvail().x, 560.0f * s));
+                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
+                                   560.0f * s));
                 const float height = 240.0f * s;
                 const ImVec2 hi(origin.x + width, origin.y + height);
 
@@ -354,11 +369,11 @@ namespace SH {
                     t.rounding * s * 0.5f);
 
                 auto* i = FUCK::GetInterface();
-                if (i) {
+                if (i && width > 140.0f * s) {
                     const float cx = origin.x + width * 0.5f;
                     const float topY = origin.y + 18.0f * s;
                     const float bottomY = hi.y - 44.0f * s;
-                    const float topHalf = 54.0f * s;
+                    const float topHalf = std::min(54.0f * s, width * 0.16f);
                     const float bottomHalf = std::min(width * 0.43f,
                                                       205.0f * s);
                     const ImVec2 p0(cx - topHalf, topY);
@@ -379,8 +394,6 @@ namespace SH {
                     i->DrawLine(p0, p3, t.border, 2.0f * s);
                     i->DrawLine(p1, p2, t.border, 2.0f * s);
 
-                    // A few perspective beat lines make the image read as a
-                    // highway rather than a generic trapezoid.
                     for (int row = 1; row <= 4; ++row) {
                         const float f = row / 5.0f;
                         const float y = topY + (bottomY - topY) * f;
@@ -393,11 +406,10 @@ namespace SH {
                     }
 
                     const float laneGap = (bottomHalf * 2.0f) / 5.0f;
-                    const float fretY = bottomY;
                     for (int lane = 0; lane < 5; ++lane) {
-                        const float x = cx - bottomHalf + laneGap *
-                            (lane + 0.5f);
-                        i->DrawCircleFilled(ImVec2(x, fretY), 11.0f * s,
+                        const float x = cx - bottomHalf +
+                            laneGap * (lane + 0.5f);
+                        i->DrawCircleFilled(ImVec2(x, bottomY), 11.0f * s,
                                             t.fret[lane], 20);
                     }
                 }
@@ -408,6 +420,7 @@ namespace SH {
 
             char _backgroundPath[512]{};
             bool _dirty = false;
+            bool _backgroundEditingDirty = false;
             bool _saveFailed = false;
             bool _previewToggle = true;
             double _saveAt = 0.0;

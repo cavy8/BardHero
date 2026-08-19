@@ -26,8 +26,6 @@ namespace SH::theme {
 
         std::string highwayBackground;
         ImVec4 highwayBackgroundTint{ 1, 1, 1, 1 };
-        ImVec4 highwaySurface{ 0.05f, 0.05f, 0.09f, 1 };
-        ImVec4 highwayRail{ 0.55f, 0.75f, 0.95f, 1 };
 
         ImVec4 fret[5] = {
             { 0.22f, 0.80f, 0.28f, 1.0f },
@@ -88,6 +86,7 @@ namespace SH::theme {
             CSimpleIniA ini;
             ini.SetUnicode();
             if (ini.LoadFile(kThemeIniPath) < 0) return t;
+
             t.panel = ReadColor(ini,"Menu","Panel",t.panel);
             t.border = ReadColor(ini,"Menu","Border",t.border);
             t.accent = ReadColor(ini,"Menu","Accent",t.accent);
@@ -101,8 +100,6 @@ namespace SH::theme {
 
             if (const char* bg = ini.GetValue("Highway","sBackground",nullptr)) t.highwayBackground = Trim(bg);
             t.highwayBackgroundTint = ReadColor(ini,"Highway","BackgroundTint",t.highwayBackgroundTint);
-            t.highwaySurface = ReadColor(ini,"Highway","Surface",t.highwaySurface);
-            t.highwayRail = ReadColor(ini,"Highway","Rail",t.highwayRail);
 
             t.fret[0] = ReadColor(ini,"Gameplay","FretGreen",t.fret[0]);
             t.fret[1] = ReadColor(ini,"Gameplay","FretRed",t.fret[1]);

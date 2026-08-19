@@ -7,11 +7,19 @@
 #include "render/Theme.h"
 
 namespace SH::panel {
-    inline const ImVec4& kText   = theme::Get().text;
-    inline const ImVec4& kQuiet  = theme::Get().muted;
-    inline const ImVec4& kGold   = theme::Get().highlight;
-    inline const ImVec4& kBlue   = theme::Get().accent;
-    inline const ImVec4& kAccent = theme::Get().accent;
+    inline ImVec4 kText{ 0.88f, 0.88f, 0.85f, 1.0f };
+    inline ImVec4 kQuiet{ 0.62f, 0.62f, 0.59f, 0.95f };
+    inline ImVec4 kGold{ 0.88f, 0.70f, 0.32f, 1.0f };
+    inline ImVec4 kBlue{ 0.48f, 0.78f, 0.90f, 1.0f };
+    inline ImVec4 kAccent{ 0.46f, 0.46f, 0.43f, 0.82f };
+
+    inline void ApplyTheme(const theme::ThemeData& t) {
+        kText = t.text;
+        kQuiet = t.muted;
+        kGold = t.highlight;
+        kBlue = t.accent;
+        kAccent = t.accent;
+    }
 
     inline void Draw(const ImVec2& lo, const ImVec2& hi,
                      const ImVec4& accent = kAccent,

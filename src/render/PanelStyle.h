@@ -4,37 +4,42 @@
 // SimpleIni + FUCK_API before this header (house include ordering).
 
 #include "render/PanelStyleLogic.h"
+#include "render/Theme.h"
 
 namespace SH::panel {
-    inline constexpr ImVec4 kText{ 0.88f, 0.88f, 0.85f, 1.0f };
-    inline constexpr ImVec4 kQuiet{ 0.62f, 0.62f, 0.59f, 0.95f };
-    inline constexpr ImVec4 kGold{ 0.88f, 0.70f, 0.32f, 1.0f };
-    inline constexpr ImVec4 kBlue{ 0.48f, 0.78f, 0.90f, 1.0f };
-    inline constexpr ImVec4 kAccent{ 0.46f, 0.46f, 0.43f, 0.82f };
+    inline const ImVec4& kText   = theme::Get().text;
+    inline const ImVec4& kQuiet  = theme::Get().muted;
+    inline const ImVec4& kGold   = theme::Get().highlight;
+    inline const ImVec4& kBlue   = theme::Get().accent;
+    inline const ImVec4& kAccent = theme::Get().accent;
 
     inline void Draw(const ImVec2& lo, const ImVec2& hi,
                      const ImVec4& accent = kAccent,
                      float alpha = 0.86f,
                      const panel_style::SurfaceStyle& surface =
                          panel_style::ModalSurface()) {
+        const auto& t = theme::Get();
         const float s = FUCK::Scale(1.0f);
-        const float rounding = surface.rounding * s;
-        if (surface.shadowOffset > 0.0f) {
-            const float shadow = surface.shadowOffset * s;
+        const float rounding = std::max(
+            0.0f, (t.rounding + surface.rounding - 9.0f) * s);
+        const float shadowOffset = std::max(
+            0.0f, t.shadowOffset + surface.shadowOffset - 5.0f);
+        if (shadowOffset > 0.0f) {
+            const float shadow = shadowOffset * s;
             FUCK::DrawRectFilled(ImVec2(lo.x + shadow, lo.y + shadow),
                                  ImVec2(hi.x + shadow, hi.y + shadow),
                                  ImVec4(0, 0, 0, 0.34f), rounding);
         }
-        FUCK::DrawRectFilled(lo, hi,
-                             ImVec4(0.032f, 0.032f, 0.030f, alpha),
-                             rounding);
-        FUCK::DrawRect(lo, hi, ImVec4(0.48f, 0.48f, 0.45f, 0.94f),
-                       rounding, 3 * s);
-        const float innerRounding =
-            std::max(0.0f, surface.rounding - 3.0f) * s;
-        FUCK::DrawRect(ImVec2(lo.x + 6 * s, lo.y + 6 * s),
-                       ImVec2(hi.x - 6 * s, hi.y - 6 * s), accent,
-                       innerRounding, s);
+        ImVec4 fill = t.panel;
+        fill.w = std::clamp(fill.w * (alpha / 0.86f), 0.0f, 1.0f);
+        FUCK::DrawRectFilled(lo, hi, fill, rounding);
+        FUCK::DrawRect(lo, hi, t.border, rounding, 3 * s);
+        if (t.innerBorder) {
+            const float innerRounding = std::max(0.0f, rounding - 3 * s);
+            FUCK::DrawRect(ImVec2(lo.x + 6 * s, lo.y + 6 * s),
+                           ImVec2(hi.x - 6 * s, hi.y - 6 * s), accent,
+                           innerRounding, s);
+        }
     }
 
     inline void DrawCurrent(const ImVec4& accent = kAccent,
@@ -56,14 +61,10 @@ namespace SH::panel {
         FUCK::SetCursorPosY(p.y + FUCK::Scale(logicalTop));
     }
 
-    // FLICK calls IWindow::Draw inside its own content child. Drawing an
-    // inset frame does not alter that child's layout bounds, so ordinary
-    // widgets still consume the full host width unless we give them a real
-    // clipped child. This is the containment contract for modal panels.
     inline void BeginBoundedContent(const char* id,
                                     float logicalInset = 20.0f,
                                     int childFlags = 0) {
-        const float  inset = FUCK::Scale(logicalInset);
+        const float inset = FUCK::Scale(logicalInset);
         const ImVec2 p = FUCK::GetCursorPos();
         const ImVec2 a = FUCK::GetContentRegionAvail();
         FUCK::SetCursorPos(ImVec2(p.x + inset, p.y + inset));
@@ -84,39 +85,42 @@ namespace SH::panel {
         const float s = FUCK::Scale(1.0f);
         const ImVec2 p = FUCK::GetCursorScreenPos();
         const float w = FUCK::GetContentRegionAvail().x;
+        ImVec4 line = theme::Get().accent;
+        line.w *= 0.85f;
         FUCK::DrawLine(ImVec2(p.x + 12 * s, p.y + 2 * s),
                        ImVec2(p.x + w - 12 * s, p.y + 2 * s),
-                       ImVec4(0.46f, 0.46f, 0.43f, 0.70f), s);
+                       line, s);
         FUCK::Dummy(ImVec2(1.0f, 10.0f * s));
     }
 
     inline void PushControls() {
-        FUCK::PushStyleColor(ImGuiCol_Button,
-                             ImVec4(0.16f, 0.16f, 0.15f, 0.94f));
+        const auto& t = theme::Get();
+        const ImVec4 white(1,1,1,1);
+        const ImVec4 black(0,0,0,1);
+        FUCK::PushStyleColor(ImGuiCol_Button, t.control);
         FUCK::PushStyleColor(ImGuiCol_ButtonHovered,
-                             ImVec4(0.28f, 0.28f, 0.26f, 0.98f));
+                             theme::Mix(t.control, t.highlight, 0.28f));
         FUCK::PushStyleColor(ImGuiCol_ButtonActive,
-                             ImVec4(0.38f, 0.38f, 0.35f, 1.0f));
+                             theme::Mix(t.control, t.highlight, 0.48f));
         FUCK::PushStyleColor(ImGuiCol_Header,
-                             ImVec4(0.22f, 0.22f, 0.21f, 0.86f));
+                             theme::Mix(t.control, t.accent, 0.34f));
         FUCK::PushStyleColor(ImGuiCol_HeaderHovered,
-                             ImVec4(0.32f, 0.32f, 0.30f, 0.94f));
+                             theme::Mix(t.control, t.accent, 0.58f));
         FUCK::PushStyleColor(ImGuiCol_HeaderActive,
-                             ImVec4(0.40f, 0.40f, 0.37f, 1.0f));
+                             theme::Mix(t.control, t.accent, 0.78f));
         FUCK::PushStyleColor(ImGuiCol_FrameBg,
-                             ImVec4(0.11f, 0.11f, 0.105f, 0.94f));
+                             theme::Mix(t.control, black, 0.25f));
         FUCK::PushStyleColor(ImGuiCol_FrameBgHovered,
-                             ImVec4(0.21f, 0.21f, 0.20f, 0.96f));
+                             theme::Mix(t.control, t.accent, 0.30f));
         FUCK::PushStyleColor(ImGuiCol_FrameBgActive,
-                             ImVec4(0.28f, 0.28f, 0.26f, 0.98f));
-        FUCK::PushStyleColor(ImGuiCol_Border,
-                             ImVec4(0.52f, 0.52f, 0.48f, 0.86f));
+                             theme::Mix(t.control, t.accent, 0.48f));
+        FUCK::PushStyleColor(ImGuiCol_Border, t.border);
         FUCK::PushStyleColor(ImGuiCol_TableHeaderBg,
-                             ImVec4(0.13f, 0.13f, 0.12f, 0.98f));
+                             theme::Mix(t.panel, t.control, 0.62f));
         FUCK::PushStyleColor(ImGuiCol_TableRowBg,
-                             ImVec4(0.055f, 0.055f, 0.052f, 0.82f));
+                             theme::Mix(t.panel, black, 0.08f));
         FUCK::PushStyleColor(ImGuiCol_TableRowBgAlt,
-                             ImVec4(0.080f, 0.080f, 0.075f, 0.82f));
+                             theme::Mix(t.panel, white, 0.04f));
     }
 
     inline void PopControls() { FUCK::PopStyleColor(13); }
@@ -128,17 +132,18 @@ namespace SH::panel {
 
     inline void ButtonFrame(const ImVec2& lo, const ImVec2& size,
                             bool hot, bool focused = false) {
+        const auto& t = theme::Get();
         const float s = FUCK::Scale(1.0f);
         const ImVec2 hi(lo.x + size.x, lo.y + size.y);
         const ImVec4 fill = hot
-            ? ImVec4(0.34f, 0.34f, 0.31f, 0.98f)
-            : focused ? ImVec4(0.25f, 0.25f, 0.23f, 0.96f)
-                      : ImVec4(0.17f, 0.17f, 0.16f, 0.94f);
+            ? theme::Mix(t.control, t.highlight, 0.34f)
+            : focused ? theme::Mix(t.control, t.accent, 0.30f)
+                      : t.control;
         FUCK::DrawRectFilled(lo, hi, fill, 4 * s);
-        FUCK::DrawRect(lo, hi,
-                       hot || focused
-                           ? ImVec4(0.74f, 0.74f, 0.68f, 1.0f)
-                           : ImVec4(0.55f, 0.55f, 0.51f, 0.95f),
-                       4 * s, (hot || focused) ? 2 * s : s);
+        const ImVec4 edge = hot || focused
+            ? theme::Mix(t.border, t.highlight, 0.55f)
+            : t.border;
+        FUCK::DrawRect(lo, hi, edge, 4 * s,
+                       (hot || focused) ? 2 * s : s);
     }
 }

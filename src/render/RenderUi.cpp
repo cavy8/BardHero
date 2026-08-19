@@ -17,6 +17,7 @@
 #include <SimpleIni.h>  // CSimpleIniA, referenced by FUCK_API.h (house ordering)
 
 #include "FUCK_API.h"
+#include "render/PanelStyle.h"
 
 #include <cmath>
 
@@ -28,8 +29,9 @@ namespace SH::RenderUi {
             return { c.x, c.y, c.z, c.w };
         }
 
-        void ApplyGameplayPalette() {
+        void ApplyTheme() {
             const auto& t = theme::Get();
+            panel::ApplyTheme(t);
             for (int i = 0; i < 5; ++i) hw::kLaneColors[i] = ToRgba(t.fret[i]);
             hw::kOpenColor    = ToRgba(t.openNote);
             hw::kMissGrey     = ToRgba(t.miss);
@@ -104,7 +106,7 @@ namespace SH::RenderUi {
     }
 
     void Register() {
-        ApplyGameplayPalette();
+        ApplyTheme();
         // Register the background first so FLICK composites the existing
         // highway surface/gems above it.
         FUCK::RegisterWindow(&g_themeHighwayBackground);

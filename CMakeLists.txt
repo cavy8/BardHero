@@ -106,10 +106,12 @@ add_executable(LoadSongTests tests/test_loadsong.cpp)
 target_link_libraries(LoadSongTests PRIVATE bardcore)
 target_compile_features(LoadSongTests PRIVATE cxx_std_23)
 
-add_executable(SongLoadProbe tools/song_load_probe.cpp)
-target_include_directories(SongLoadProbe PRIVATE src)
-target_link_libraries(SongLoadProbe PRIVATE bardcore)
-target_compile_features(SongLoadProbe PRIVATE cxx_std_23)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/song_load_probe.cpp")
+    add_executable(SongLoadProbe tools/song_load_probe.cpp)
+    target_include_directories(SongLoadProbe PRIVATE src)
+    target_link_libraries(SongLoadProbe PRIVATE bardcore)
+    target_compile_features(SongLoadProbe PRIVATE cxx_std_23)
+endif()
 
 add_executable(ClockTests tests/test_clock.cpp)
 target_link_libraries(ClockTests PRIVATE bardcore)
@@ -309,24 +311,28 @@ add_executable(PracticeLayoutTests tests/test_practicelayout.cpp)
 target_include_directories(PracticeLayoutTests PRIVATE src tests)
 target_compile_features(PracticeLayoutTests PRIVATE cxx_std_23)
 
-add_executable(XwmTranscoderProbe
-    tools/xwm_transcode_probe.cpp
-    src/audio/XwmTranscoder.cpp)
-target_include_directories(XwmTranscoderProbe PRIVATE src)
-target_compile_features(XwmTranscoderProbe PRIVATE cxx_std_23)
-target_link_libraries(XwmTranscoderProbe PRIVATE
-    Opus::opus "${OPUSENC_LIBRARY}"
-    mfplat mfreadwrite mfuuid wmcodecdspuuid ole32)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/xwm_transcode_probe.cpp")
+    add_executable(XwmTranscoderProbe
+        tools/xwm_transcode_probe.cpp
+        src/audio/XwmTranscoder.cpp)
+    target_include_directories(XwmTranscoderProbe PRIVATE src)
+    target_compile_features(XwmTranscoderProbe PRIVATE cxx_std_23)
+    target_link_libraries(XwmTranscoderProbe PRIVATE
+        Opus::opus "${OPUSENC_LIBRARY}"
+        mfplat mfreadwrite mfuuid wmcodecdspuuid ole32)
+endif()
 
-add_executable(BaBootstrapProbe
-    tools/ba_bootstrap_probe.cpp
-    src/game/BaLibraryBootstrap.cpp
-    src/audio/XwmTranscoder.cpp)
-target_include_directories(BaBootstrapProbe PRIVATE src bardcore)
-target_compile_features(BaBootstrapProbe PRIVATE cxx_std_23)
-target_link_libraries(BaBootstrapProbe PRIVATE
-    spdlog::spdlog Opus::opus "${OPUSENC_LIBRARY}"
-    mfplat mfreadwrite mfuuid wmcodecdspuuid ole32)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/ba_bootstrap_probe.cpp")
+    add_executable(BaBootstrapProbe
+        tools/ba_bootstrap_probe.cpp
+        src/game/BaLibraryBootstrap.cpp
+        src/audio/XwmTranscoder.cpp)
+    target_include_directories(BaBootstrapProbe PRIVATE src bardcore)
+    target_compile_features(BaBootstrapProbe PRIVATE cxx_std_23)
+    target_link_libraries(BaBootstrapProbe PRIVATE
+        spdlog::spdlog Opus::opus "${OPUSENC_LIBRARY}"
+        mfplat mfreadwrite mfuuid wmcodecdspuuid ole32)
+endif()
 
 add_commonlibsse_plugin(${PROJECT_NAME}
     SOURCES

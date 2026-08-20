@@ -249,7 +249,7 @@ namespace SH::hw {
     void FxPool::ConfettiBurst(float x, float y, float spread,
                                float scale) {
         // lane palette + gold + white, upward fan under gravity
-        static constexpr RGBA kPal[7] = {
+        const RGBA kPal[7] = {
             kLaneColors[0], kLaneColors[1], kLaneColors[2],
             kLaneColors[3], kLaneColors[4],
             { 0.96f, 0.73f, 0.20f, 1.0f },  // gold

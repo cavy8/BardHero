@@ -28,21 +28,77 @@
 
 namespace SH {
     namespace theme_tool {
+        // Per-field editing state for one theme-owned image path: a text
+        // buffer synced from the model, a "committed on blur" dirty flag
+        // (reloading through FLICK on every keystroke would be both noisy
+        // and expensive), and enough of a preview load to show the user
+        // what actually loaded. Shared by the three decorative highway
+        // layers (underlay/midlayer/overlay) - the highway background
+        // keeps its own hand-written copy of this same shape since it
+        // also carries a 1:2 aspect warning these layers don't need.
+        struct LayerFieldState {
+            char path[512]{};
+            bool editingDirty = false;
+            void* previewImage = nullptr;
+            bool previewAttempted = false;
+            std::string previewPath;
+            float previewW = 0.0f;
+            float previewH = 0.0f;
+
+            void Sync(const std::string& value) {
+                std::snprintf(path, sizeof(path), "%s", value.c_str());
+            }
+
+            void ReleasePreview() {
+                if (previewImage) {
+                    if (auto* i = FUCK::GetInterface()) {
+                        i->ReleaseImage(previewImage);
+                    }
+                }
+                previewImage = nullptr;
+                previewPath.clear();
+                previewAttempted = false;
+                previewW = previewH = 0.0f;
+            }
+
+            void RefreshPreview(const std::string& value) {
+                ReleasePreview();
+                if (value.empty()) return;
+                auto* i = FUCK::GetInterface();
+                if (!i) return;
+                previewAttempted = true;
+                previewPath = value;
+                previewImage = i->LoadImage(value.c_str(), false);
+                if (previewImage) {
+                    i->GetImageInfo(previewImage, &previewW, &previewH);
+                }
+            }
+        };
+
         class ThemeTool final : public FUCK::ITool {
         public:
             const char* Name() const override { return "Bard Hero Theme"; }
 
             void OnOpen() override {
                 SyncBackgroundBuffer();
-                RefreshPreviewImage();
+                _underlay.Sync(theme::Get().highwayUnderlay);
+                _midlayer.Sync(theme::Get().highwayMidlayer);
+                _overlay.Sync(theme::Get().highwayOverlay);
+                RefreshAllPreviews();
                 _dirty = false;
                 _backgroundEditingDirty = false;
+                _underlay.editingDirty = false;
+                _midlayer.editingDirty = false;
+                _overlay.editingDirty = false;
                 _saveFailed = false;
             }
 
             void OnClose() override {
                 SaveNow();
                 ReleasePreviewImage();
+                _underlay.ReleasePreview();
+                _midlayer.ReleasePreview();
+                _overlay.ReleasePreview();
             }
 
             void Draw() override {
@@ -62,26 +118,38 @@ namespace SH {
                 if (FUCK::Button("Reload from file")) {
                     theme::Reload();
                     SyncBackgroundBuffer();
+                    _underlay.Sync(theme::Get().highwayUnderlay);
+                    _midlayer.Sync(theme::Get().highwayMidlayer);
+                    _overlay.Sync(theme::Get().highwayOverlay);
                     RenderUi::ApplyTheme(true);
-                    RefreshPreviewImage();
+                    RefreshAllPreviews();
                     _dirty = false;
                     _backgroundEditingDirty = false;
+                    _underlay.editingDirty = false;
+                    _midlayer.editingDirty = false;
+                    _overlay.editingDirty = false;
                     _saveFailed = false;
                 }
                 FUCK::SameLine();
                 if (FUCK::Button("Reset theme defaults")) {
                     theme::ResetDefaults();
                     SyncBackgroundBuffer();
+                    _underlay.Sync(theme::Get().highwayUnderlay);
+                    _midlayer.Sync(theme::Get().highwayMidlayer);
+                    _overlay.Sync(theme::Get().highwayOverlay);
                     RenderUi::ApplyTheme(true);
-                    RefreshPreviewImage();
+                    RefreshAllPreviews();
                     _backgroundEditingDirty = false;
+                    _underlay.editingDirty = false;
+                    _midlayer.editingDirty = false;
+                    _overlay.editingDirty = false;
                     QueueSave();
                 }
                 if (_saveFailed) {
                     FUCK::TextColored(
                         ImVec4(0.95f, 0.35f, 0.30f, 1.0f),
                         "Could not save theme.ini; check the log/path permissions.");
-                } else if (_dirty || _backgroundEditingDirty) {
+                } else if (_dirty || AnyLayerPathEditingDirty()) {
                     FUCK::TextDisabled("Unsaved theme changes.");
                 } else {
                     FUCK::TextDisabled("Theme saved.");
@@ -128,6 +196,29 @@ namespace SH {
                 QueueSave();
             }
 
+            // Same shape as CommitBackgroundPath, generalized over which
+            // theme string a decorative layer's field edits.
+            void CommitLayerPath(LayerFieldState& field, std::string& target) {
+                if (!field.editingDirty) return;
+                target = field.path;
+                field.editingDirty = false;
+                RenderUi::ApplyTheme(true);
+                field.RefreshPreview(target);
+                QueueSave();
+            }
+
+            bool AnyLayerPathEditingDirty() const {
+                return _backgroundEditingDirty || _underlay.editingDirty ||
+                       _midlayer.editingDirty || _overlay.editingDirty;
+            }
+
+            void RefreshAllPreviews() {
+                RefreshPreviewImage();
+                _underlay.RefreshPreview(theme::Get().highwayUnderlay);
+                _midlayer.RefreshPreview(theme::Get().highwayMidlayer);
+                _overlay.RefreshPreview(theme::Get().highwayOverlay);
+            }
+
             void MaybeSave() {
                 if (_dirty && FUCK::GetTime() >= _saveAt) SaveNow();
             }
@@ -136,6 +227,9 @@ namespace SH {
                 // Clicking Save or closing FLICK is also a field commit, so a
                 // path typed without tabbing away is never silently lost.
                 CommitBackgroundPath();
+                CommitLayerPath(_underlay, theme::Mutable().highwayUnderlay);
+                CommitLayerPath(_midlayer, theme::Mutable().highwayMidlayer);
+                CommitLayerPath(_overlay, theme::Mutable().highwayOverlay);
                 if (!_dirty) return;
                 _saveFailed = !theme::Save();
                 _dirty = _saveFailed;
@@ -289,6 +383,78 @@ namespace SH {
                             _previewW, _previewH);
                     }
                 }
+
+                DrawLayerField(
+                    "Underlay image",
+                    "Drawn below everything, including the background "
+                    "image above.",
+                    "Underlay", _underlay, t.highwayUnderlay,
+                    t.highwayUnderlayTint);
+                DrawLayerField(
+                    "Midlayer image",
+                    "Drawn above the background image, below the note "
+                    "highway itself (gems, trails, HUD, banners).",
+                    "Midlayer", _midlayer, t.highwayMidlayer,
+                    t.highwayMidlayerTint);
+                DrawLayerField(
+                    "Overlay image",
+                    "Drawn above everything else the highway shows.",
+                    "Overlay", _overlay, t.highwayOverlay,
+                    t.highwayOverlayTint);
+            }
+
+            // Shared by the three decorative highway layers (underlay,
+            // midlayer, overlay): a path field committed on blur, a tint,
+            // a manual reload button and a loaded-size readout. Unlike the
+            // background image these are scaled to fit the screen rather
+            // than mapped onto the highway trapezoid, so there is no
+            // aspect-ratio expectation to warn about - any image works.
+            void DrawLayerField(const char* sectionTitle, const char* hint,
+                                const char* idSuffix, LayerFieldState& field,
+                                std::string& target, ImVec4& tint) {
+                FUCK::SeparatorText(sectionTitle);
+                char pathId[64];
+                std::snprintf(pathId, sizeof(pathId), "Image path##%s",
+                             idSuffix);
+                if (FUCK::InputText(pathId, field.path,
+                                    sizeof(field.path))) {
+                    field.editingDirty = true;
+                }
+                if (FUCK::IsItemDeactivatedAfterEdit()) {
+                    CommitLayerPath(field, target);
+                }
+                FUCK::TextDisabled("%s", hint);
+                FUCK::TextDisabled(
+                    "Scaled (never stretched) to fit the screen; any "
+                    "aspect ratio works.");
+
+                char tintId[32];
+                std::snprintf(tintId, sizeof(tintId), "Tint##%s", idSuffix);
+                if (EditColor(tintId, tint)) ApplyLive();
+
+                char reloadId[48];
+                std::snprintf(reloadId, sizeof(reloadId), "Reload##%s",
+                             idSuffix);
+                if (FUCK::Button(reloadId)) {
+                    if (field.editingDirty) {
+                        CommitLayerPath(field, target);
+                    } else {
+                        RenderUi::ApplyTheme(true);
+                        field.RefreshPreview(target);
+                    }
+                }
+
+                if (target.empty()) {
+                    FUCK::TextDisabled("No image selected.");
+                } else if (!field.previewImage && field.previewAttempted) {
+                    FUCK::TextColored(
+                        theme::Get().miss,
+                        "Image could not be loaded. The current path is "
+                        "kept.");
+                } else if (field.previewImage) {
+                    FUCK::TextDisabled("Loaded %.0fx%.0f",
+                                       field.previewW, field.previewH);
+                }
             }
 
             // Both of these publish EVERY frame the tab is drawn rather than
@@ -376,6 +542,12 @@ namespace SH {
             std::string _previewPath;
             float _previewW = 0.0f;
             float _previewH = 0.0f;
+
+            // The three decorative full-screen highway layers (see
+            // RenderUi.cpp / HighwayFullscreenLayerD3D).
+            LayerFieldState _underlay;
+            LayerFieldState _midlayer;
+            LayerFieldState _overlay;
         };
 
         inline ThemeTool g_themeTool;

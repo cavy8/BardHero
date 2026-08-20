@@ -377,6 +377,10 @@ add_commonlibsse_plugin(${PROJECT_NAME}
         src/render/FlickRenderer.cpp
         src/render/HighwaySurfaceD3D.h
         src/render/HighwaySurfaceD3D.cpp
+        src/render/HighwayFullscreenLayerD3D.h
+        src/render/HighwayFullscreenLayerD3D.cpp
+        src/render/WicImageLoad.h
+        src/render/WicImageLoad.cpp
         src/render/HighwayWindow.h
         src/render/HighwayWindow.cpp
         src/render/FlickWindowPolicy.h

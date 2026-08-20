@@ -33,6 +33,19 @@ namespace SH::theme {
         ImVec4 highwayStrikeline{ 1.00f, 1.00f, 1.00f, 1.0f };
         ImVec4 highwayMeasureLine{ 1.00f, 1.00f, 1.00f, 0.34f };
 
+        // Three optional full-screen decorative layers, each scaled (never
+        // stretched) to fit the screen with letterbox/pillarbox bars, shown
+        // only while the highway itself is showing. Underlay sits below
+        // even the highway background image; midlayer sits above that
+        // image but below the highway's own gems/HUD/banners; overlay sits
+        // above all of that highway content.
+        std::string highwayUnderlay;
+        ImVec4 highwayUnderlayTint{ 1, 1, 1, 1 };
+        std::string highwayMidlayer;
+        ImVec4 highwayMidlayerTint{ 1, 1, 1, 1 };
+        std::string highwayOverlay;
+        ImVec4 highwayOverlayTint{ 1, 1, 1, 1 };
+
         ImVec4 fret[5] = {
             { 0.22f, 0.80f, 0.28f, 1.0f },
             { 0.90f, 0.22f, 0.20f, 1.0f },
@@ -152,6 +165,25 @@ namespace SH::theme {
             t.highwayMeasureLine = ReadColor(
                 ini,"Highway","MeasureLine",t.highwayMeasureLine);
 
+            if (const char* ul = ini.GetValue(
+                    "Highway","sUnderlay",nullptr)) {
+                t.highwayUnderlay = std::string(Trim(ul));
+            }
+            t.highwayUnderlayTint = ReadColor(
+                ini,"Highway","UnderlayTint",t.highwayUnderlayTint);
+            if (const char* ml = ini.GetValue(
+                    "Highway","sMidlayer",nullptr)) {
+                t.highwayMidlayer = std::string(Trim(ml));
+            }
+            t.highwayMidlayerTint = ReadColor(
+                ini,"Highway","MidlayerTint",t.highwayMidlayerTint);
+            if (const char* ov = ini.GetValue(
+                    "Highway","sOverlay",nullptr)) {
+                t.highwayOverlay = std::string(Trim(ov));
+            }
+            t.highwayOverlayTint = ReadColor(
+                ini,"Highway","OverlayTint",t.highwayOverlayTint);
+
             t.fret[0] = ReadColor(ini,"Gameplay","FretGreen",t.fret[0]);
             t.fret[1] = ReadColor(ini,"Gameplay","FretRed",t.fret[1]);
             t.fret[2] = ReadColor(ini,"Gameplay","FretYellow",t.fret[2]);
@@ -209,6 +241,13 @@ namespace SH::theme {
         setColor("Highway", "BorderLine", t.highwayBorderLine);
         setColor("Highway", "Strikeline", t.highwayStrikeline);
         setColor("Highway", "MeasureLine", t.highwayMeasureLine);
+
+        ini.SetValue("Highway", "sUnderlay", t.highwayUnderlay.c_str());
+        setColor("Highway", "UnderlayTint", t.highwayUnderlayTint);
+        ini.SetValue("Highway", "sMidlayer", t.highwayMidlayer.c_str());
+        setColor("Highway", "MidlayerTint", t.highwayMidlayerTint);
+        ini.SetValue("Highway", "sOverlay", t.highwayOverlay.c_str());
+        setColor("Highway", "OverlayTint", t.highwayOverlayTint);
 
         static constexpr const char* kFretKeys[5] = {
             "FretGreen", "FretRed", "FretYellow", "FretBlue",

@@ -1,5 +1,5 @@
 #include "PCH.h"
-#include "render/HighwaySurfaceD3D.h"
+#include "render/HighwayFullscreenLayerD3D.h"
 
 #include "render/WicImageLoad.h"
 
@@ -7,8 +7,8 @@
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -27,33 +27,31 @@ namespace SH::hw {
         }
 
         struct Vertex {
-            float x;
-            float y;
+            float x, y;
+            float u, v;
         };
 
         struct Constants {
-            float viewport[4];  // width, height, topLeftX, topLeftY
-            float style[4];     // strikeY, horizonY, halfWStrike, halfWHorizon
-            float params[4];    // depthGain, phase, unused, unused
+            float viewport[4];  // width, height, unused, unused
             float tint[4];
         };
 
         static_assert(sizeof(Constants) % 16 == 0);
 
         constexpr char kShader[] = R"(
-cbuffer HighwaySurfaceConstants : register(b0) {
+cbuffer FullscreenLayerConstants : register(b0) {
     float4 gViewport;
-    float4 gStyle;
-    float4 gParams;
     float4 gTint;
 };
 
 struct VSIn {
     float2 pos : POSITION;
+    float2 uv  : TEXCOORD0;
 };
 
 struct VSOut {
     float4 pos : SV_Position;
+    float2 uv  : TEXCOORD0;
 };
 
 VSOut VSMain(VSIn input) {
@@ -62,6 +60,7 @@ VSOut VSMain(VSIn input) {
     ndc.x = input.pos.x / gViewport.x * 2.0f - 1.0f;
     ndc.y = 1.0f - input.pos.y / gViewport.y * 2.0f;
     output.pos = float4(ndc, 0.0f, 1.0f);
+    output.uv = input.uv;
     return output;
 }
 
@@ -69,16 +68,7 @@ Texture2D gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
 float4 PSMain(VSOut input) : SV_Target {
-    float2 pixel = input.pos.xy - gViewport.zw;
-    float z = saturate((pixel.y - gStyle.x) / (gStyle.y - gStyle.x));
-    float halfW = lerp(gStyle.z, gStyle.w, z);
-    float texX = halfW > 0.0f
-        ? 0.5f + (pixel.x - gViewport.x * 0.5f) / (2.0f * halfW)
-        : 0.5f;
-    float depthGain = gParams.x;
-    float u = z / (depthGain - (depthGain - 1.0f) * z);
-    float texY = 1.0f - u - gParams.y;
-    return gTexture.Sample(gSampler, float2(texX, texY)) * gTint;
+    return gTexture.Sample(gSampler, input.uv) * gTint;
 }
 )";
 
@@ -86,7 +76,7 @@ float4 PSMain(VSOut input) : SV_Target {
                            ComPtr<ID3DBlob>& blob) {
             ComPtr<ID3DBlob> errors;
             const HRESULT hr = D3DCompile(
-                kShader, std::strlen(kShader), "BardHeroHighwaySurface",
+                kShader, std::strlen(kShader), "BardHeroFullscreenLayer",
                 nullptr, nullptr, entry, target,
                 D3DCOMPILE_ENABLE_STRICTNESS |
                     D3DCOMPILE_OPTIMIZATION_LEVEL3,
@@ -95,13 +85,18 @@ float4 PSMain(VSOut input) : SV_Target {
                 const char* text = errors
                     ? static_cast<const char*>(errors->GetBufferPointer())
                     : "";
-                spdlog::warn("[render] highway surface shader compile: {} {}",
-                             HrText(entry, hr), text);
+                spdlog::warn(
+                    "[render] fullscreen layer shader compile: {} {}",
+                    HrText(entry, hr), text);
                 return false;
             }
             return true;
         }
 
+        // Device state save/restore around one manual draw call. Mirrors
+        // HighwaySurfaceD3D's backup exactly (same reasoning: this runs
+        // inside FLICK's own frame, so it must hand the pipeline back
+        // exactly as it found it).
         class D3DStateBackup {
         public:
             explicit D3DStateBackup(ID3D11DeviceContext* context) :
@@ -281,7 +276,7 @@ float4 PSMain(VSOut input) : SV_Target {
         };
     }
 
-    struct HighwaySurfaceD3D::Impl {
+    struct HighwayFullscreenLayerD3D::Impl {
         ID3D11Device* deviceRaw = nullptr;
         ComPtr<ID3D11VertexShader> vertexShader;
         ComPtr<ID3D11PixelShader> pixelShader;
@@ -295,6 +290,8 @@ float4 PSMain(VSOut input) : SV_Target {
         ComPtr<ID3D11RasterizerState> rasterizerState;
         ComPtr<ID3D11ShaderResourceView> texture;
         std::string texturePath;
+        std::uint32_t texWidth = 0;
+        std::uint32_t texHeight = 0;
         bool textureAttempted = false;
         bool deviceFailed = false;
         bool loggedNoDevice = false;
@@ -320,6 +317,7 @@ float4 PSMain(VSOut input) : SV_Target {
         void Refresh() {
             texture.Reset();
             texturePath.clear();
+            texWidth = texHeight = 0;
             textureAttempted = false;
         }
 
@@ -337,7 +335,7 @@ float4 PSMain(VSOut input) : SV_Target {
 
             const auto fail = [this](std::string_view message) {
                 deviceFailed = true;
-                spdlog::warn("[render] highway surface {}", message);
+                spdlog::warn("[render] fullscreen layer {}", message);
                 return false;
             };
 
@@ -364,9 +362,11 @@ float4 PSMain(VSOut input) : SV_Target {
             const D3D11_INPUT_ELEMENT_DESC inputDesc[] = {
                 { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0,
                   D3D11_INPUT_PER_VERTEX_DATA, 0 },
+                { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 8,
+                  D3D11_INPUT_PER_VERTEX_DATA, 0 },
             };
             hr = device->CreateInputLayout(
-                inputDesc, 1, vsBlob->GetBufferPointer(),
+                inputDesc, 2, vsBlob->GetBufferPointer(),
                 vsBlob->GetBufferSize(), &inputLayout);
             if (FAILED(hr)) {
                 return fail(HrText("CreateInputLayout", hr));
@@ -406,9 +406,9 @@ float4 PSMain(VSOut input) : SV_Target {
 
             D3D11_SAMPLER_DESC samplerDesc{};
             samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-            samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-            samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-            samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+            samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+            samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+            samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
             samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
             hr = device->CreateSamplerState(&samplerDesc, &sampler);
             if (FAILED(hr)) {
@@ -464,14 +464,6 @@ float4 PSMain(VSOut input) : SV_Target {
             std::uint32_t width = 0;
             std::uint32_t height = 0;
             if (!LoadImageRGBA8(path, pixels, width, height)) return false;
-            if (std::abs(static_cast<float>(width) /
-                             static_cast<float>(height) -
-                         0.5f) > 0.01f) {
-                spdlog::warn(
-                    "[theme] highway background is {}x{}; Clone Hero "
-                    "standard is 1:2",
-                    width, height);
-            }
 
             D3D11_TEXTURE2D_DESC texDesc{};
             texDesc.Width = width;
@@ -489,7 +481,7 @@ float4 PSMain(VSOut input) : SV_Target {
             ComPtr<ID3D11Texture2D> d3dTexture;
             HRESULT hr = device->CreateTexture2D(&texDesc, &data, &d3dTexture);
             if (FAILED(hr)) {
-                spdlog::warn("[theme] highway background texture: {}",
+                spdlog::warn("[render] fullscreen layer texture: {}",
                              HrText("CreateTexture2D", hr));
                 return false;
             }
@@ -501,27 +493,28 @@ float4 PSMain(VSOut input) : SV_Target {
             hr = device->CreateShaderResourceView(d3dTexture.Get(), &srvDesc,
                                                   &texture);
             if (FAILED(hr)) {
-                spdlog::warn("[theme] highway background SRV: {}",
+                spdlog::warn("[render] fullscreen layer SRV: {}",
                              HrText("CreateShaderResourceView", hr));
                 return false;
             }
+            texWidth = width;
+            texHeight = height;
             return true;
         }
     };
 
-    HighwaySurfaceD3D::HighwaySurfaceD3D() :
+    HighwayFullscreenLayerD3D::HighwayFullscreenLayerD3D() :
         _impl(std::make_unique<Impl>()) {}
-    HighwaySurfaceD3D::~HighwaySurfaceD3D() = default;
+    HighwayFullscreenLayerD3D::~HighwayFullscreenLayerD3D() = default;
 
-    void HighwaySurfaceD3D::Refresh() {
+    void HighwayFullscreenLayerD3D::Refresh() {
         if (_impl) _impl->Refresh();
     }
 
-    bool HighwaySurfaceD3D::RenderBackground(
-        std::string_view path, const RGBA& tint, const Style& style,
-        const View& view, double visual, double lookahead) {
-        if (!_impl || path.empty() || view.w <= 0.0f || view.h <= 0.0f ||
-            lookahead <= 0.0) {
+    bool HighwayFullscreenLayerD3D::Render(std::string_view path,
+                                           const RGBA& tint,
+                                           const View& view) {
+        if (!_impl || path.empty() || view.w <= 0.0f || view.h <= 0.0f) {
             return false;
         }
 
@@ -533,8 +526,9 @@ float4 PSMain(VSOut input) : SV_Target {
         if (!device || !context) {
             if (!_impl->loggedNoDevice) {
                 _impl->loggedNoDevice = true;
-                spdlog::warn("[render] highway surface D3D device/context is "
-                             "not available");
+                spdlog::warn(
+                    "[render] fullscreen layer D3D device/context is not "
+                    "available");
             }
             return false;
         }
@@ -543,6 +537,7 @@ float4 PSMain(VSOut input) : SV_Target {
             !_impl->EnsureTexture(device, path)) {
             return false;
         }
+        if (_impl->texWidth == 0 || _impl->texHeight == 0) return false;
 
         D3DStateBackup state(context);
         ID3D11RenderTargetView* rtv = state.RenderTarget();
@@ -553,47 +548,53 @@ float4 PSMain(VSOut input) : SV_Target {
         if (!rtv) {
             if (!_impl->loggedNoTarget) {
                 _impl->loggedNoTarget = true;
-                spdlog::warn("[render] highway surface render target is not "
-                             "available");
+                spdlog::warn(
+                    "[render] fullscreen layer render target is not "
+                    "available");
             }
             return false;
         }
 
         const D3D11_VIEWPORT vp = state.FirstViewport(view);
         if (vp.Width <= 0.0f || vp.Height <= 0.0f) return false;
-        const View d3dView{ vp.Width, vp.Height };
-        const float cx = d3dView.w * 0.5f;
+
+        // Scale to fit, never stretch: pick the smaller of the two axis
+        // scales so the whole image lands on screen, then center it.
+        // Nothing is drawn in the leftover margin.
+        const float scale = std::min(
+            vp.Width / static_cast<float>(_impl->texWidth),
+            vp.Height / static_cast<float>(_impl->texHeight));
+        const float drawW = static_cast<float>(_impl->texWidth) * scale;
+        const float drawH = static_cast<float>(_impl->texHeight) * scale;
+        const float x0 = (vp.Width - drawW) * 0.5f;
+        const float y0 = (vp.Height - drawH) * 0.5f;
+
         const Vertex vertices[4] = {
-            { cx - HalfWOf(style, d3dView, 1.0f), YOf(style, d3dView, 1.0f) },
-            { cx + HalfWOf(style, d3dView, 1.0f), YOf(style, d3dView, 1.0f) },
-            { cx + HalfWOf(style, d3dView, 0.0f), YOf(style, d3dView, 0.0f) },
-            { cx - HalfWOf(style, d3dView, 0.0f), YOf(style, d3dView, 0.0f) },
+            { x0, y0, 0.0f, 0.0f },
+            { x0 + drawW, y0, 1.0f, 0.0f },
+            { x0 + drawW, y0 + drawH, 1.0f, 1.0f },
+            { x0, y0 + drawH, 0.0f, 1.0f },
         };
 
         D3D11_MAPPED_SUBRESOURCE mapped{};
         HRESULT hr = context->Map(_impl->vertexBuffer.Get(), 0,
                                   D3D11_MAP_WRITE_DISCARD, 0, &mapped);
         if (FAILED(hr)) {
-            spdlog::warn("[render] highway surface {}",
+            spdlog::warn("[render] fullscreen layer {}",
                          HrText("Map(vertex)", hr));
             return false;
         }
         std::memcpy(mapped.pData, vertices, sizeof(vertices));
         context->Unmap(_impl->vertexBuffer.Get(), 0);
 
-        const float phase = HighwayBackgroundPhase(visual, lookahead);
         const Constants constants{
-            { vp.Width, vp.Height, vp.TopLeftX, vp.TopLeftY },
-            { YOf(style, d3dView, 0.0f), YOf(style, d3dView, 1.0f),
-              HalfWOf(style, d3dView, 0.0f),
-              HalfWOf(style, d3dView, 1.0f) },
-            { style.depthGain, phase, 0.0f, 0.0f },
+            { vp.Width, vp.Height, 0.0f, 0.0f },
             { tint.r, tint.g, tint.b, tint.a },
         };
         hr = context->Map(_impl->constantBuffer.Get(), 0,
                           D3D11_MAP_WRITE_DISCARD, 0, &mapped);
         if (FAILED(hr)) {
-            spdlog::warn("[render] highway surface {}",
+            spdlog::warn("[render] fullscreen layer {}",
                          HrText("Map(constants)", hr));
             return false;
         }

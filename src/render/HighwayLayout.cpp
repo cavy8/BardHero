@@ -143,6 +143,44 @@ namespace SH::hw {
         return lane == bard::kOpenLane ? kOpenColor : kLaneColors[lane];
     }
 
+    void EmitSurface(const Style& s, const View& v, bool spActive, int combo,
+                     IHighwayRenderer& r) {
+        const float cx = v.w * 0.5f;
+        const V2 floor[4] = {
+            { cx - HalfWOf(s, v, 1.0f), YOf(s, v, 1.0f) },
+            { cx + HalfWOf(s, v, 1.0f), YOf(s, v, 1.0f) },
+            { cx + HalfWOf(s, v, 0.0f), YOf(s, v, 0.0f) },
+            { cx - HalfWOf(s, v, 0.0f), YOf(s, v, 0.0f) },
+        };
+        r.Quad(Sprite::kHighwayFade, floor,
+               spActive ? RGBA{ 0.02f, 0.14f, 0.17f, 1.0f }
+                        : RGBA{ 0.05f, 0.05f, 0.09f, 1.0f });
+
+        const float streak =
+            0.6f * (std::min(combo, 50) / 50.0f);
+        RGBA rail = spActive ? RGBA{ 0.10f, 0.92f, 1.00f, 0.92f }
+                             : RGBA{ 0.55f, 0.75f, 0.95f, 0.75f };
+        rail.r += (1.0f - rail.r) * streak;
+        rail.g += (1.0f - rail.g) * streak;
+        rail.b += (1.0f - rail.b) * streak;
+
+        for (int side = -1; side <= 1; side += 2) {
+            const float nearEdge = cx + side * HalfWOf(s, v, 0.0f);
+            const float farEdge  = cx + side * HalfWOf(s, v, 1.0f);
+            const float nearHalfWidth =
+                std::max(2.0f, 0.03f * HalfWOf(s, v, 0.0f));
+            const float farHalfWidth =
+                std::max(2.0f, 0.03f * HalfWOf(s, v, 1.0f));
+            const V2 edge[4] = {
+                { farEdge - farHalfWidth, YOf(s, v, 1.0f) },
+                { farEdge + farHalfWidth, YOf(s, v, 1.0f) },
+                { nearEdge + nearHalfWidth, YOf(s, v, 0.0f) },
+                { nearEdge - nearHalfWidth, YOf(s, v, 0.0f) },
+            };
+            r.QuadFilled(edge, rail);
+        }
+    }
+
     void EmitGem(const Style& s, const View& v, const bard::Note& n, float z,
                   int judgment, bool spActive, bool spPhraseAvailable,
                   IHighwayRenderer& r) {

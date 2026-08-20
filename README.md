@@ -58,7 +58,8 @@ chrome.
 
 Highway artwork follows the Clone Hero convention: use a 1:2 width:height
 image such as 512x1024 or 1024x2048. The image is mapped onto BardHero's
-perspective highway with FLICK's image-quad API. Changing the image path is
+perspective highway as one continuous image quad and scrolls with the notes;
+it is never tiled or split into strips. Changing the image path is
 committed when the path field is finished (or when **Save now** is pressed),
 then the texture is released/reloaded without restarting Skyrim. Manual
 `theme.ini` edits can be picked up with **Reload from file**.

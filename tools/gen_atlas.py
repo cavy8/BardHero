@@ -187,6 +187,17 @@ def cell_needle():
     a = np.clip(head + 0.85 * tail, 0, 1)
     return np.ones_like(r), a
 
+def cell_highway_fade():
+    # Cell 56: highway floor depth-fade, a real per-pixel alpha ramp
+    # (replaces DrawSurface's 64 flat-alpha strips - visible banding at
+    # 16 steps, still visible at 64; field 2026-08-19). White so it tints
+    # like every other sprite. cy=-1 (top of cell, v=0) is the horizon
+    # edge, cy=+1 (bottom, v=1) is the strikeline edge - endpoints match
+    # the old strip formula's 0.10/0.65 exactly so the look doesn't shift.
+    t = (cy + 1.0) / 2.0
+    a = 0.10 + 0.55 * t
+    return np.ones_like(r), np.clip(a, 0, 1)
+
 # --- cells 30/31/38: GH-feel spec P3 lightning-bolt segments --------------
 # Jagged bright segment along +x with a soft glow skirt; drawn in game as
 # oriented quads chained into a polyline (BoltOffsets jitters the nodes).
@@ -293,17 +304,18 @@ for col, row, cols_wide, text, font_px in STRIPS:
     write_tile(lum, a, col * CELL, row * CELL, cols_wide * CELL, CELL)
 
 # P2 flame cells sit at fixed indices (50-55, row 6): APPEND ONLY - moving
-# any earlier cell repoints every later sprite (known pitfall). Row 7 is
-# deliberately kept whole for the P5 catchphrase strip.
+# any earlier cell repoints every later sprite (known pitfall). Cell 56 is a
+# low-resolution fallback reference; runtime uses highway_fade.png instead.
 P2_CELLS = [(50 + i, cell_flame_fb(i)) for i in range(4)] + \
     [(54, cell_ember), (55, cell_needle), (39, cell_trail_cap)] + \
-    [(30, cell_bolt(0)), (31, cell_bolt(1)), (38, cell_bolt(2))]
+    [(30, cell_bolt(0)), (31, cell_bolt(1)), (38, cell_bolt(2))] + \
+    [(56, cell_highway_fade)]
 for i, fn in P2_CELLS:
     lum, a = fn()
     write_tile(lum, a, (i % GRID) * CELL, (i // GRID) * CELL, CELL, CELL)
 
 # P5 win-screen catchphrase strips (user-picked 2026-07-25; spec 12 bans
-# "You Rock!"). Full rows for hero-moment crispness; row 6 cells 56-63
+# "You Rock!"). Full rows for hero-moment crispness; row 7 cells 57-63
 # stay free for P6. GLORIOUS! ties to the Glory meter; FLAWLESS! replaces
 # it on a full combo.
 WIN_STRIPS = [
@@ -323,3 +335,22 @@ os.makedirs(OUT, exist_ok=True)
 path = os.path.join(OUT, "atlas.png")
 Image.fromarray(atlas).save(path)
 print("wrote", path, atlas.shape)
+
+# The highway fade is deliberately separate from the 128px atlas cells.
+# FLICK's highway quad can cover hundreds of screen rows; sampling the small
+# alpha ramp there exposes its quantization as stationary horizontal bands.
+# Stochastic alpha rounding distributes each fractional alpha level across x
+# instead, preserving one continuous draw quad without coherent row edges.
+FADE_W, FADE_H = 1024, 2048
+fade_y = np.linspace(0.10, 0.65, FADE_H, dtype=np.float32)[:, None]
+fade_alpha = fade_y * 255.0
+fade_floor = np.floor(fade_alpha)
+fade_frac = fade_alpha - fade_floor
+fade_rng = np.random.default_rng(0xBA4D)
+fade_noise = fade_rng.random((FADE_H, FADE_W), dtype=np.float32)
+fade_a = fade_floor + (fade_noise < fade_frac)
+fade = np.full((FADE_H, FADE_W, 4), 255, dtype=np.uint8)
+fade[..., 3] = fade_a.astype(np.uint8)
+fade_path = os.path.join(OUT, "highway_fade.png")
+Image.fromarray(fade).save(fade_path, optimize=True)
+print("wrote", fade_path, fade.shape)

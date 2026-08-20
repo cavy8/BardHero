@@ -34,85 +34,32 @@ namespace SH::RenderUi {
             return { c.x, c.y, c.z, c.w };
         }
 
-        // ---- highway background tiling --------------------------------
-        // One tile of the image spans exactly one lookahead of chart, so a
-        // grain line covers the highway in the same time a note does - the
-        // texture and the notes it carries move as one surface.
-        constexpr float kBgTiles  = 1.0f;
-        // Strip count: a trapezoid is two triangles with AFFINE uv, so the
-        // texture's vertical lines kink across the diagonal by up to half
-        // the strip's width change. At 64 strips that residue is ~2px on a
-        // 1080p highway; as one quad it was ~130px (field 2026-08-19).
-        constexpr int   kBgStrips = 64;
-        // Depth cuts (kBgStrips + 1 boundaries) plus room for the tile
-        // seams merged in among them.
-        constexpr int   kBgMaxCuts = kBgStrips + 5;
-
-        // Draws the highway background as depth strips whose v is a
-        // function of SONG TIME rather than of screen depth. Screen-depth v
-        // is what a single quad gives, and it is wrong twice over: it has
-        // no perspective foreshortening, and it cannot scroll at all.
-        void DrawTiledHighway(void* image, const ImVec4& tint,
-                              const hw::Style& st, const hw::View& v,
-                              double visual, double lookahead) {
+        // FLICK currently exposes a whole textured quad, but not its active
+        // ImDrawList or a textured-mesh primitive. Keep this on the supported
+        // renderer API: borrowing another overlay's ImGui context crashes.
+        void DrawHighwayBackground(void* image, const ImVec4& tint,
+                                   const hw::Style& st, const hw::View& v,
+                                   double visual, double lookahead) {
             auto* i = FUCK::GetInterface();
             if (!i || !image || lookahead <= 0.0) return;
 
-            // Tile phase at the strikeline. v runs BACKWARDS along u so the
-            // image's bottom edge sits at the strikeline, as the untiled
-            // draw had it; anchoring it to visual time is what pins the
-            // texture to the chart instead of to the camera.
-            float vBase = static_cast<float>(
-                std::fmod(visual / lookahead * kBgTiles, 1.0));
-            if (vBase < 0.0f) vBase += 1.0f;
-
-            // Depth cuts, plus a cut at every tile seam: FLICK makes no
-            // promise about a repeating sampler, so the wrap is done here
-            // in geometry and every quad keeps its uv inside [0,1].
-            float us[kBgMaxCuts];
-            int   n = 0;
-            for (int c = 0; c <= kBgStrips; ++c) {
-                us[n++] = hw::UOfZ(static_cast<float>(c) / kBgStrips,
-                                   st.depthGain);
-            }
-            for (int m = 1;
-                 m <= static_cast<int>(std::ceil(kBgTiles)) &&
-                 n < kBgMaxCuts;
-                 ++m) {
-                const float u = (static_cast<float>(m) - vBase) / kBgTiles;
-                if (u > 0.0f && u < 1.0f) us[n++] = u;
-            }
-            std::sort(us, us + n);
-
-            const float cx = v.w * 0.5f;
-            for (int c = 0; c + 1 < n; ++c) {
-                const float u0 = us[c], u1 = us[c + 1];  // near, far
-                if (u1 - u0 <= 1e-6f) continue;
-                const float z0 = hw::ZOf(u0, st.depthGain);
-                const float z1 = hw::ZOf(u1, st.depthGain);
-                const float y0 = hw::YOf(st, v, z0);
-                const float y1 = hw::YOf(st, v, z1);
-                const float h0 = hw::HalfWOf(st, v, z0);
-                const float h1 = hw::HalfWOf(st, v, z1);
-                // No seam lies strictly inside the span, so both ends share
-                // a tile index; take it from the midpoint and subtract.
-                const float raw0 = -(vBase + u0 * kBgTiles);
-                const float raw1 = -(vBase + u1 * kBgTiles);
-                const float tile = std::floor((raw0 + raw1) * 0.5f);
-                const float t0 = std::clamp(raw0 - tile, 0.0f, 1.0f);
-                const float t1 = std::clamp(raw1 - tile, 0.0f, 1.0f);
-                i->DrawImageQuad(image,
-                                 ImVec2(cx - h1, y1), ImVec2(cx + h1, y1),
-                                 ImVec2(cx + h0, y0), ImVec2(cx - h0, y0),
-                                 ImVec2(0.0f, t1), ImVec2(1.0f, t1),
-                                 ImVec2(1.0f, t0), ImVec2(0.0f, t0), tint);
-            }
+            const float cx    = v.w * 0.5f;
+            const float farY  = hw::YOf(st, v, 1.0f);
+            const float nearY = hw::YOf(st, v, 0.0f);
+            const float farW  = hw::HalfWOf(st, v, 1.0f);
+            const float nearW = hw::HalfWOf(st, v, 0.0f);
+            float phase = static_cast<float>(
+                std::fmod(visual / lookahead, 1.0));
+            if (phase < 0.0f) phase += 1.0f;
+            i->DrawImageQuad(
+                image,
+                ImVec2(cx - farW, farY), ImVec2(cx + farW, farY),
+                ImVec2(cx + nearW, nearY), ImVec2(cx - nearW, nearY),
+                ImVec2(0.0f, -phase), ImVec2(1.0f, -phase),
+                ImVec2(1.0f, 1.0f - phase),
+                ImVec2(0.0f, 1.0f - phase), tint);
         }
 
-        // Visual (song-domain) time driving the background scroll. A live
-        // session owns the clock; the theme editor's preview has none, so
-        // any monotonic clock scrolls at the right RATE - which is all the
-        // preview is showing.
         double BackgroundScrollTime() {
             auto& feed = EngineFeed::GetSingleton();
             if (feed.active.load(std::memory_order_acquire)) {
@@ -202,12 +149,11 @@ namespace SH::RenderUi {
                 if (disp.x <= 0.0f || disp.y <= 0.0f) return;
                 const hw::View  v{ disp.x, disp.y };
                 const hw::Style st = hw::Style::Default();
-                // Same clamp as the highway itself: the two share a
-                // lookahead or the surface slides under its own notes.
                 const double lookahead = std::clamp(
                     Settings::GetSingleton().highwayLookaheadSec, 0.3, 5.0);
-                DrawTiledHighway(_image, t.highwayBackgroundTint, st, v,
-                                 BackgroundScrollTime(), lookahead);
+                DrawHighwayBackground(
+                    _image, t.highwayBackgroundTint, st, v,
+                    BackgroundScrollTime(), lookahead);
             }
 
         private:

@@ -241,8 +241,8 @@ namespace SH {
                 }
                 FUCK::TextDisabled(
                     "Clone Hero standard is 1:2 width:height, e.g. "
-                    "512x1024 or 1024x2048. It scrolls with the notes, so "
-                    "use an image that tiles top-to-bottom.");
+                    "512x1024 or 1024x2048. It scrolls with the notes; "
+                    "top and bottom should meet cleanly.");
 
                 if (EditColor("Background tint", t.highwayBackgroundTint)) {
                     ApplyLive();

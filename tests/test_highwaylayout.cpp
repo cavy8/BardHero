@@ -63,10 +63,7 @@ static void RunDepthTests() {
     }
     CHECK_NEAR(ZOf(-0.1, k), -k * 0.1, 1e-6);  // linear extension below
 
-    // UOfZ inverts ZOf over the visible span. The textured highway
-    // background rides on it: strips are cut in screen depth, but their v
-    // must come back out as song time or the texture scrolls at a rate the
-    // notes on it do not share.
+    // UOfZ inverts ZOf over the visible span.
     CHECK_NEAR(UOfZ(0.0f, k), 0.0, 1e-9);
     CHECK_NEAR(UOfZ(1.0f, k), 1.0, 1e-6);
     for (double u = 0.0; u <= 1.0; u += 0.05) {
@@ -174,6 +171,21 @@ static void RunTrailSegTests() {
 static void RunEmitTests() {
     const Style s = Style::Default();
     const View  v{ 1920, 1080 };
+    {   // The highway floor never decomposes into strips: one gradient
+        // shape and exactly one continuous shape for each edge.
+        RecordingRenderer r;
+        EmitSurface(s, v, false, 0, r);
+        CHECK(r.ops.size() == 3);
+        CHECK(r.ops[0].textured);
+        CHECK(r.ops[0].sprite ==
+              static_cast<int>(Sprite::kHighwayFade));
+        CHECK(!r.ops[1].textured);
+        CHECK(!r.ops[2].textured);
+        for (const auto& op : r.ops) {
+            CHECK_NEAR(op.p[0].y, YOf(s, v, 1.0f), 1e-3);
+            CHECK_NEAR(op.p[3].y, YOf(s, v, 0.0f), 1e-3);
+        }
+    }
     {   // pending green single at the strikeline
         RecordingRenderer r;
         EmitGem(s, v, N(0.0, 0x01), 0.0f, 0, false, false, r);

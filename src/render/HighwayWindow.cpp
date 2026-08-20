@@ -301,54 +301,7 @@ namespace SH {
 
             void DrawSurface(const hw::Style& st, const hw::View& v,
                              bool sp, int combo) {
-                const float cx = v.w * 0.5f;
-                // combo streak: rails lerp toward white as the streak grows
-                const float streak =
-                    0.6f * (std::min(combo, 50) / 50.0f);
-                for (int i = 0; i < st.strips; ++i) {
-                    const float z0 = static_cast<float>(i) / st.strips;
-                    const float z1 = static_cast<float>(i + 1) / st.strips;
-                    // Alpha from the strip MIDPOINT, not its near edge:
-                    // the quad is one flat color, so sampling the ramp at
-                    // the middle centers the quantization error instead of
-                    // pushing the whole surface one half-step dark.
-                    const float a  = 0.10f + 0.55f * (1.0f - 0.5f * (z0 + z1));
-                    const hw::V2 p[4] = {
-                        { cx - hw::HalfWOf(st, v, z1), hw::YOf(st, v, z1) },
-                        { cx + hw::HalfWOf(st, v, z1), hw::YOf(st, v, z1) },
-                        { cx + hw::HalfWOf(st, v, z0), hw::YOf(st, v, z0) },
-                        { cx - hw::HalfWOf(st, v, z0), hw::YOf(st, v, z0) },
-                    };
-                    // Active Star Power floods the surface cyan.
-                    _r.QuadFilled(p, sp ? hw::RGBA{ 0.02f, 0.14f, 0.17f, a }
-                                        : hw::RGBA{ 0.05f, 0.05f, 0.09f, a });
-                    // Edge rails share the same cyan activation language.
-                    hw::RGBA rail =
-                        sp ? hw::RGBA{ 0.10f, 0.92f, 1.00f, 0.92f }
-                           : hw::RGBA{ 0.55f, 0.75f, 0.95f, 0.75f };
-                    rail.r += (1.0f - rail.r) * streak;
-                    rail.g += (1.0f - rail.g) * streak;
-                    rail.b += (1.0f - rail.b) * streak;
-                    for (int side = -1; side <= 1; side += 2) {
-                        const float e0 =
-                            cx + side * hw::HalfWOf(st, v, z0);
-                        const float e1 =
-                            cx + side * hw::HalfWOf(st, v, z1);
-                        const float w0 = std::max(
-                            2.0f, 0.03f * hw::HalfWOf(st, v, z0));
-                        const float w1 = std::max(
-                            2.0f, 0.03f * hw::HalfWOf(st, v, z1));
-                        const hw::V2 rp[4] = {
-                            { e1 - w1, hw::YOf(st, v, z1) },
-                            { e1 + w1, hw::YOf(st, v, z1) },
-                            { e0 + w0, hw::YOf(st, v, z0) },
-                            { e0 - w0, hw::YOf(st, v, z0) },
-                        };
-                        hw::RGBA c = rail;
-                        c.a *= 1.0f - 0.5f * z0;
-                        _r.QuadFilled(rp, c);
-                    }
-                }
+                hw::EmitSurface(st, v, sp, combo, _r);
             }
 
             void DrawBeatLines(const hw::Style& st, const hw::View& v,

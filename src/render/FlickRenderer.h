@@ -3,7 +3,7 @@
 
 // IHighwayRenderer -> FUCK ABI. Thin, untested glue (the pure side is
 // HighwayLayout). No FUCK types in this header (include-order pitfall);
-// the atlas handle is an opaque void*.
+// image handles are opaque void* values.
 
 #include "render/IHighwayRenderer.h"
 
@@ -19,8 +19,10 @@ namespace SH::hw {
                               const RGBA& c) override;
 
     private:
-        void* _atlas = nullptr;
-        bool  _loggedMissing = false;
-        int   _retryCounter  = 0;
+        void* _atlas             = nullptr;
+        void* _highwayFade       = nullptr;
+        bool  _loggedMissing     = false;
+        bool  _fadeLoadAttempted = false;
+        int   _retryCounter      = 0;
     };
 }

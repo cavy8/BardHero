@@ -12,6 +12,8 @@ namespace SH::hw {
     namespace {
         constexpr const char* kAtlasPath =
             "Data/SKSE/Plugins/BardHero/highway/atlas.png";
+        constexpr const char* kHighwayFadePath =
+            "Data/SKSE/Plugins/BardHero/highway/highway_fade.png";
         inline ImVec2 IV(const V2& p) { return ImVec2(p.x, p.y); }
         inline ImVec4 IC(const RGBA& c) { return ImVec4(c.r, c.g, c.b, c.a); }
 
@@ -19,19 +21,29 @@ namespace SH::hw {
 
 
     bool FlickRenderer::Ready() {
-        if (_atlas) return true;
+        if (_atlas && _highwayFade) return true;
         auto* i = FUCK::GetInterface();
         if (!i) return false;
-        // While missing, retry only every 120th call (no per-frame disk
-        // probe); the error is logged once.
-        if (_loggedMissing) {
-            if (++_retryCounter < 120) return false;
-            _retryCounter = 0;
+        if (!_atlas) {
+            // While missing, retry only every 120th call (no per-frame disk
+            // probe); the error is logged once.
+            if (_loggedMissing) {
+                if (++_retryCounter < 120) return false;
+                _retryCounter = 0;
+            }
+            _atlas = i->LoadImage(kAtlasPath, false);
+            if (!_atlas && !_loggedMissing) {
+                spdlog::error("[render] atlas missing: {}", kAtlasPath);
+                _loggedMissing = true;
+            }
         }
-        _atlas = i->LoadImage(kAtlasPath, false);
-        if (!_atlas && !_loggedMissing) {
-            spdlog::error("[render] atlas missing: {}", kAtlasPath);
-            _loggedMissing = true;
+        if (_atlas && !_highwayFade && !_fadeLoadAttempted) {
+            _fadeLoadAttempted = true;
+            _highwayFade = i->LoadImage(kHighwayFadePath, false);
+            if (!_highwayFade) {
+                spdlog::error("[render] highway fade missing: {}",
+                              kHighwayFadePath);
+            }
         }
         return _atlas != nullptr;
     }
@@ -39,6 +51,22 @@ namespace SH::hw {
     void FlickRenderer::Quad(Sprite spr, const V2 p[4], const RGBA& tint) {
         auto* i = FUCK::GetInterface();
         if (!i || !_atlas) return;
+        if (spr == Sprite::kHighwayFade) {
+            if (_highwayFade) {
+                i->DrawImageQuad(
+                    _highwayFade, IV(p[0]), IV(p[1]), IV(p[2]), IV(p[3]),
+                    ImVec2(0.0f, 0.0f), ImVec2(1.0f, 0.0f),
+                    ImVec2(1.0f, 1.0f), ImVec2(0.0f, 1.0f), IC(tint));
+            } else {
+                // Missing optional render asset: retain one whole shape and
+                // never fall back to the visibly banded low-res atlas cell.
+                RGBA solid = tint;
+                solid.a *= 0.38f;
+                i->DrawQuadFilled(IV(p[0]), IV(p[1]), IV(p[2]), IV(p[3]),
+                                  IC(solid));
+            }
+            return;
+        }
         const UvRect uv = UvOf(spr);
         i->DrawImageQuad(_atlas, IV(p[0]), IV(p[1]), IV(p[2]), IV(p[3]),
                          ImVec2(uv.u0, uv.v0), ImVec2(uv.u1, uv.v0),

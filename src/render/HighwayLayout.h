@@ -27,11 +27,6 @@ namespace SH::hw {
         float tailSec      = 0.25f;   // missed gems live this long past the line
         float gemHalfW     = 0.40f;   // gem half-width / lane spacing
         float gemSquash    = 0.62f;   // gem height / width (perspective ellipse)
-        // Surface strips (spec 9). Each strip is one flat-alpha quad, so
-        // the count IS the resolution of the depth shading: at 16 the
-        // 0.65->0.10 ramp stepped ~0.034 per band and read as horizontal
-        // blocks over a highway background image (field 2026-08-19).
-        int   strips       = 64;
         static Style Default() { return {}; }
     };
 
@@ -44,9 +39,6 @@ namespace SH::hw {
     float ZOf(double u, float depthGain);
 
     // Inverse of ZOf over the visible span (z in [0,1] -> u in [0,1]).
-    // The textured background needs it: its strips are cut in screen
-    // depth, but its v has to be a function of SONG TIME or the texture
-    // scrolls at a different rate than the notes riding on it.
     float UOfZ(float z, float depthGain);
 
     float YOf(const Style& s, const View& v, float z);
@@ -119,6 +111,11 @@ namespace SH::hw {
     // return to their ordinary lane colors.
     RGBA VisualNoteColor(const bard::Note& n, int lane, bool missed,
                           bool spActive, bool spPhraseAvailable);
+    // One gradient quad followed by one continuous quad for each edge rail.
+    // This exact shape count prevents strip seams from re-entering the
+    // highway surface renderer.
+    void EmitSurface(const Style& s, const View& v, bool spActive, int combo,
+                     IHighwayRenderer& r);
     void EmitGem(const Style& s, const View& v, const bard::Note& n, float z,
                   int judgment, bool spActive, bool spPhraseAvailable,
                   IHighwayRenderer& r);

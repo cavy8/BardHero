@@ -25,6 +25,7 @@
 #include "render/PanelStyle.h"
 #include "render/PracticeLayout.h"
 #include "render/SongSortLogic.h"
+#include "render/ThemePreview.h"
 #include "render/UiSound.h"
 
 #include <algorithm>
@@ -214,6 +215,43 @@ namespace SH {
                         spdlog::info(
                             "[practice] picker opened directly for {}",
                             path_text::Utf8(pickEntry.folder));
+                    }
+                }
+                // The theme editor asks for the REAL Songbook rather than a
+                // mock of it, so the preview lives here in the pump beside
+                // every other reason this window opens and closes. Held
+                // open by a heartbeat (render/ThemePreview.h): leaving the
+                // page stops the publishing and the close below fires by
+                // itself, which is why nothing on the editor side has to
+                // remember to shut us down.
+                //
+                // EDGE-triggered, not level-triggered: closing the preview
+                // from inside it (back button, red fret) must stay closed
+                // rather than have this pump reopen it on the next frame.
+                // The editor's own control is what reopens it.
+                {
+                    const bool wantPreview = theme_preview::Is(
+                        theme_preview::Target::kSongbook);
+                    auto* self = const_cast<BrowserWindow*>(this);
+                    if (wantPreview && !_previewArmed) {
+                        self->_previewArmed = true;
+                        // A running session force-closes this window two
+                        // lines below, so opening one here would only log a
+                        // preview that was gone in the same frame. The
+                        // editor page says why instead.
+                        if (!_open.load() &&
+                            !EngineFeed::GetSingleton().active.load()) {
+                            self->Open(songeligibility::kContextFree);
+                            // AFTER Open: that clears the flag, so any
+                            // ordinary open can never be taken for a
+                            // preview and refused at Play.
+                            self->_previewHeld = true;
+                            spdlog::info(
+                                "[theme] Songbook opened for preview");
+                        }
+                    } else if (!wantPreview && _previewArmed) {
+                        self->_previewArmed = false;
+                        if (_previewHeld) self->Close();
                     }
                 }
                 // a session starting (or active) force-closes the browser;
@@ -1087,6 +1125,15 @@ namespace SH {
             void Play(const std::vector<SongInfo>& songs, std::size_t n,
                       const std::vector<int>& lockNeed,
                       int a_instrumentContext) {
+                // A theme preview is a picture of the Songbook, not the
+                // Songbook. Starting a song from behind the FLICK menu the
+                // player is reading is never what the click meant - and it
+                // belongs at the choke point for the same reason every other
+                // refusal does.
+                if (_previewHeld) {
+                    ui_sound::Play(ui_sound::Event::kCancel);
+                    return;
+                }
                 if (n >= songs.size()) {
                     spdlog::warn(
                         "[browser] refused stale song index {} (library "
@@ -1536,6 +1583,10 @@ namespace SH {
             }
 
             void Open(int a_instrumentContext) {
+                // Every ordinary open route lands here, so clearing the
+                // preview marker in this one place is what guarantees a
+                // real browse is never refused at the Play choke point.
+                _previewHeld = false;
                 _instrumentContext = a_instrumentContext;
                 _selected          = -1;
                 _clickArm          = -1;
@@ -1569,6 +1620,10 @@ namespace SH {
             }
             void Close() {
                 _open.store(false);
+                // ...and clearing it here is what keeps it meaning "the
+                // browse that is open right now is a preview" rather than
+                // "a preview happened at some point".
+                _previewHeld = false;
                 LeavePracticeView();
                 _clickArm = -1;  // an arm must not survive close/reopen
                 // a stale refusal flash must not greet the next open, and
@@ -1584,6 +1639,12 @@ namespace SH {
             }
             // mutable: IsOpen() is const but consumes the open request
             mutable std::atomic<bool> _open{ false };
+            // Theme preview latch, same shape as ResultsWindow's: _armed
+            // mirrors the editor's request with edge semantics, _held says
+            // the browse open right now is a preview (and so is refused at
+            // the Play choke point).
+            bool   _previewArmed = false;
+            bool   _previewHeld  = false;
             int    _instrumentContext = songeligibility::kContextFree;
             int    _difficulty = 3;  // re-seeded from Settings at Open
             int    _selected = -1, _clickArm = -1;

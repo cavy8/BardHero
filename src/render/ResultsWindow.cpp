@@ -16,6 +16,7 @@
 #include "render/PanelStyle.h"
 #include "render/ResultsAnimation.h"
 #include "render/ResultsLayout.h"
+#include "render/ThemePreview.h"
 #include "render/UiSound.h"
 
 #include <algorithm>
@@ -25,6 +26,46 @@
 namespace SH {
     namespace {
         constexpr ImVec4 kEarnedGold{ 0.96f, 0.73f, 0.20f, 1.0f };
+
+        // The sample run the theme editor poses this panel on. Deliberately
+        // a run that lights EVERY themed element at once - a new best, a
+        // known purse, a rank that moved, a star count short of five so both
+        // the earned and unearned pips are on screen - because a preview
+        // that only shows half the panel is how the other half ends up
+        // unreadable in a theme nobody checked it against.
+        //
+        // stingCue/-1 and clearSting/false are load-bearing: the first-draw
+        // celebration audio is keyed on them, and a preview must not fire
+        // song-end stings at somebody sitting in a menu.
+        UiBus::Results PreviewResults() {
+            UiBus::Results r;
+            r.songName   = "Theme Preview";
+            r.artist     = "Bard Hero";
+            r.score      = 148250;
+            r.notesHit   = 476;
+            r.notesTotal = 512;
+            r.maxCombo   = 214;
+            r.overstrums = 6;
+            r.spPhrases  = 4;
+            r.stars      = 4;
+            r.fullCombo  = false;
+            r.prevBest   = 3;
+            r.newBest    = true;
+            r.difficulty = 3;
+            r.stingCue   = -1;
+            r.clearSting = false;
+            r.goldKnown  = true;
+            r.gold       = 240;
+            r.goldReason = "Sample payout";
+            r.rankKnown       = true;
+            r.expertiseBefore = 38;
+            r.expertiseAfter  = 46;
+            r.rankBefore      = 2;
+            r.rankAfter       = 3;
+            r.xpGain          = 8;
+            r.instrument      = 0;
+            return r;
+        }
 
         void TextAt(const ImVec2& p, const char* text, const ImVec4& color) {
             FUCK::SetCursorScreenPos(p);
@@ -160,7 +201,40 @@ namespace SH {
             const char* Id() const override { return "ResultsV13"; }
             const char* Title() const override { return "Results"; }
             bool        IsOpen() const override {
-                const bool open = UiBus::GetSingleton().resultsReady.load();
+                // Theme editor preview. Deliberately does NOT go through
+                // StageResults/resultsReady: that path owns a real run's
+                // snapshot and the FLICK open gate, and a preview has no
+                // business touching either. This window simply agrees to be
+                // open for its own reason and to snapshot itself.
+                //
+                // EDGE-triggered like the Songbook's: dismissing the preview
+                // with CONTINUE has to stay dismissed rather than be
+                // reopened by this poll on the very next frame.
+                {
+                    const bool want = theme_preview::Is(
+                        theme_preview::Target::kResults);
+                    auto* self = const_cast<ResultsWindow*>(this);
+                    if (want && !_previewArmed) {
+                        self->_previewArmed = true;
+                        // Never over a REAL panel. A player's own results
+                        // are the better preview anyway, and claiming one
+                        // as a preview would mean ending the preview
+                        // dismissed their run's box for them. A running
+                        // session closes this window in Draw regardless.
+                        if (!UiBus::GetSingleton().resultsReady.load() &&
+                            !EngineFeed::GetSingleton().active.load(
+                                std::memory_order_acquire)) {
+                            self->_previewOpen = true;
+                            spdlog::info(
+                                "[theme] results opened for preview");
+                        }
+                    } else if (!want && _previewArmed) {
+                        self->_previewArmed = false;
+                        if (_previewOpen) self->Close();
+                    }
+                }
+                const bool open = UiBus::GetSingleton().resultsReady.load() ||
+                                  _previewOpen;
                 // resultsReady can now be cleared EXTERNALLY (OnPreLoadGame:
                 // a load closes the box) - Draw then stops being called, so
                 // the cursor must be released here (pause-menu precedent)
@@ -240,7 +314,8 @@ namespace SH {
                 // first Draw, held across kCloseOnGameMenu hide/re-show,
                 // reset by Close() for the next open.
                 if (!_snapHeld) {
-                    _snap = bus.ReadResults();
+                    _snap = _previewOpen ? PreviewResults()
+                                         : bus.ReadResults();
                     _snapHeld = true;
                     _openedAt = FUCK::GetTime();
                     RenderUi::AcquireCursor();
@@ -254,6 +329,21 @@ namespace SH {
                     _nextHoldFlameAt = 0.0;
                     _lastPingedStar  = -1;
                     _burstsFired     = 0;
+                    // A preview opens SETTLED. The phrase slam, the score
+                    // count-up and its looped tick, the star pings and the
+                    // flame bursts are all driven off _openedAt and these
+                    // two counters, so backdating past the whole timeline
+                    // does two jobs at once: it puts the finished panel on
+                    // screen immediately - nobody tuning a color wants to
+                    // sit through a 1.4s slam on every open - and it leaves
+                    // no audio or particle site with a frame to fire on.
+                    // _prevFxT deliberately keeps the REAL now, so the
+                    // particle step does not see a ten-second delta.
+                    if (_previewOpen) {
+                        _openedAt -= 10.0;
+                        _lastPingedStar = 5;  // past every pip
+                        _burstsFired    = 2;  // both flame bursts spent
+                    }
                     spdlog::info("[results] celebration phrase={}",
                                  _snap.fullCombo ? "FLAWLESS" : "GLORIOUS");
                     // The electric song-end sting pops WITH the menu
@@ -723,6 +813,11 @@ namespace SH {
             void Close() {
                 UiBus::GetSingleton().CloseResults();
                 _snapHeld = false;
+                // Only the OPEN half of the preview latch. _previewArmed
+                // stays as it is so that dismissing a preview with CONTINUE
+                // does not immediately re-arm it in IsOpen; the editor's own
+                // control is what reopens one.
+                _previewOpen = false;
                 _openedAt = 0.0;
                 // Every dismissal path, including the new-session bail at
                 // the top of Draw - a confirm mid-count-up must not leave
@@ -737,6 +832,11 @@ namespace SH {
             UiBus::Results _snap;
             bool           _snapHeld = false;
             bool           _cursorHeld = false;
+            // Theme preview latch: _armed mirrors the editor's request with
+            // edge semantics, _open says this particular open is a preview
+            // (and so is snapshotted from PreviewResults, not the bus).
+            bool           _previewArmed = false;
+            bool           _previewOpen  = false;
             double         _openedAt = 0.0;
             // P5 celebration (render-thread only)
             hw::FlickRenderer _hwR;

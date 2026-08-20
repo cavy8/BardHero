@@ -12,6 +12,7 @@
 #include "render/ResultsWindow.h"
 #include "render/SettingsTool.h"
 #include "render/Theme.h"
+#include "render/ThemePreview.h"
 #include "render/ThemeTool.h"
 #include "render/FlickWindowPolicy.h"
 
@@ -37,9 +38,14 @@ namespace SH::RenderUi {
                 return "BardHero Highway Background";
             }
             bool IsOpen() const override {
-                return !theme::Get().highwayBackground.empty() &&
-                       EngineFeed::GetSingleton().active.load(
-                           std::memory_order_acquire);
+                if (theme::Get().highwayBackground.empty()) return false;
+                // The theme editor's highway preview is composited on the
+                // real background for the same reason it uses the real
+                // trapezoid: a tint judged against a blank surface is a
+                // tint judged against something no player will ever see.
+                return EngineFeed::GetSingleton().active.load(
+                           std::memory_order_acquire) ||
+                       theme_preview::Is(theme_preview::Target::kHighway);
             }
             void SetOpen(bool) override {}
             void Draw() override {}

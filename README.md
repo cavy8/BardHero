@@ -30,8 +30,25 @@ BardHero currently uses one theme from
 `Data/SKSE/Plugins/BardHero/theme.ini`. The same theme is editable in-game
 through FLICK's **Bard Hero Theme** tool. Changes to menu colors, geometry,
 fret/gameplay colors and highway tint apply immediately and are saved back
-to `theme.ini` automatically. The editor includes live previews for BardHero
-menu surfaces, the five-fret gameplay palette and the perspective highway.
+to `theme.ini` automatically.
+
+The preview is the real menu. Each tab of the editor puts the actual
+BardHero window it themes on screen behind the FLICK menu, at full size, so
+you are looking at the finished result rather than a sample of it:
+
+- **Menus** shows the real Songbook or the real results panel — pick which
+  from the tab's *Preview* control. Song rows do nothing while the Songbook
+  is a preview, and the results panel opens settled on a sample run, with
+  its celebration animation and sounds held. Neither is shown during a song;
+  both close themselves when a run starts.
+- **Gameplay** and **Highway** show the real note highway on a short demo
+  phrase, drawn by the same code and at the same size as gameplay, over the
+  real background image. If a song is already playing — pause it and open
+  the editor from the pause menu's **Settings** row — you tune against your
+  own chart instead.
+
+Every preview is tied to the page being open: leave the tab, switch tools or
+close the FLICK menu and it takes itself down.
 
 The theme intentionally exposes a small set of high-impact choices rather
 than every ImGui/style value: BardHero panel colors and rounding, the core

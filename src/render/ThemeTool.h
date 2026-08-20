@@ -4,15 +4,24 @@
 // as a separate ITool instead of inflating SettingsTool.cpp: it owns image
 // preview lifetime, live application, and theme.ini persistence while the
 // ordinary settings page remains gameplay/configuration focused.
+//
+// The preview is the REAL menu. Each tab publishes a theme_preview::Target
+// every frame and the shipped windows put themselves on screen behind this
+// page (FLICK draws its menu over registered IWindows - see
+// PauseMenuWindow.cpp, which routes to this very menu mid-song for exactly
+// that reason). Mock swatches drawn in this panel were the earlier design
+// and were wrong in the way every mock is wrong: they showed a panel this
+// file had to keep in step with BrowserWindow/ResultsWindow/HighwayWindow
+// by hand, at a size and against a backdrop the player never sees.
 
 #include <SimpleIni.h>
 #include "FUCK_API.h"
 
-#include "render/PanelStyle.h"
+#include "game/EngineFeed.h"
 #include "render/RenderUi.h"
 #include "render/Theme.h"
+#include "render/ThemePreview.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -40,9 +49,11 @@ namespace SH {
                 MaybeSave();
 
                 FUCK::TextDisabled(
-                    "Edits the single BardHero theme. Color and geometry "
-                    "changes apply immediately; the highway image reloads "
-                    "when its path edit is committed.");
+                    "Edits the single BardHero theme. Each tab puts the real "
+                    "menu it themes on screen behind this page, so what you "
+                    "see is the finished result. Color and geometry changes "
+                    "apply immediately; the highway image reloads when its "
+                    "path edit is committed.");
 
                 if (FUCK::Button("Save now")) {
                     SaveNow();
@@ -166,6 +177,8 @@ namespace SH {
                 auto& t = theme::Mutable();
                 bool changed = false;
 
+                DrawMenuPreviewControls();
+
                 FUCK::SeparatorText("Palette");
                 changed |= EditColor("Panel", t.panel);
                 changed |= EditColor("Border", t.border);
@@ -186,14 +199,13 @@ namespace SH {
                 }
 
                 if (changed) ApplyLive();
-
-                FUCK::SeparatorText("Live preview");
-                DrawMenuPreview();
             }
 
             void DrawGameplayEditor() {
                 auto& t = theme::Mutable();
                 bool changed = false;
+
+                DrawHighwayPreviewControls();
 
                 FUCK::SeparatorText("Fret lanes");
                 changed |= EditColor("Green fret", t.fret[0]);
@@ -208,13 +220,12 @@ namespace SH {
                 changed |= EditColor("Star Power", t.starPower);
 
                 if (changed) ApplyLive();
-
-                FUCK::SeparatorText("Live preview");
-                DrawGameplayPreview();
             }
 
             void DrawHighwayEditor() {
                 auto& t = theme::Mutable();
+
+                DrawHighwayPreviewControls();
 
                 FUCK::SeparatorText("Background image");
                 if (FUCK::InputText(
@@ -265,166 +276,88 @@ namespace SH {
                             _previewW, _previewH);
                     }
                 }
-
-                FUCK::SeparatorText("Live preview");
-                DrawHighwayPreview();
             }
 
-            void DrawMenuPreview() {
-                const auto& t = theme::Get();
-                const float s = FUCK::Scale(1.0f);
-                const ImVec2 origin = FUCK::GetCursorScreenPos();
-                const float width = std::max(
-                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
-                                   560.0f * s));
-                const float height = 150.0f * s;
-                const ImVec2 hi(origin.x + width, origin.y + height);
-
-                panel::Draw(origin, hi, t.accent);
-
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x + 18.0f * s, origin.y + 14.0f * s));
-                FUCK::PushStyleColor(ImGuiCol_Text, t.text);
-                FUCK::PushFont(FUCK::GetFont(FUCK::Font::kLarge));
-                FUCK::Text("Bard Hero");
-                FUCK::PopFont();
-                FUCK::TextColored(t.muted,
-                                  "Songbook / pause / results presentation");
-                panel::PushControls();
-                FUCK::Button("Preview button##themePreview");
-                FUCK::SameLine();
-                FUCK::Checkbox("Preview toggle##themePreview",
-                               &_previewToggle, false, true);
-                panel::PopControls();
-                FUCK::TextColored(t.highlight,
-                                  "Highlighted information and earned stars");
-                FUCK::PopStyleColor();
-
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x, hi.y + 8.0f * s));
-            }
-
-            void DrawGameplayPreview() {
-                const auto& t = theme::Get();
-                const float s = FUCK::Scale(1.0f);
-                const ImVec2 origin = FUCK::GetCursorScreenPos();
-                const float width = std::max(
-                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
-                                   560.0f * s));
-                const float height = 175.0f * s;
-                const ImVec2 hi(origin.x + width, origin.y + height);
-
-                const ImVec4 bg = theme::Mix(
-                    t.panel, ImVec4(0,0,0,1), 0.30f);
-                FUCK::DrawRectFilled(origin, hi, bg,
-                                     t.rounding * s * 0.5f);
-                FUCK::DrawRect(origin, hi, t.border,
-                               t.rounding * s * 0.5f, s);
-
-                auto* i = FUCK::GetInterface();
-                if (i && width > 120.0f * s) {
-                    const float y = origin.y + 73.0f * s;
-                    const float left = origin.x + 48.0f * s;
-                    const float right = hi.x - 48.0f * s;
-                    const float gap = (right - left) / 4.0f;
-                    const float radius = 14.0f * s;
-                    for (int lane = 0; lane < 5; ++lane) {
-                        const ImVec2 c(left + gap * lane, y);
-                        i->DrawCircleFilled(c, radius, t.fret[lane], 24);
-                        i->DrawCircle(c, radius, t.border, 24, 2.0f * s);
-                    }
-                    i->DrawLine(ImVec2(left, y + 35.0f * s),
-                                ImVec2(right, y + 35.0f * s),
-                                t.openNote, 8.0f * s);
+            // Both of these publish EVERY frame the tab is drawn rather than
+            // on change. That is what makes the heartbeat in ThemePreview.h
+            // work: switching tabs, switching tools or closing the menu all
+            // stop the publishing, and the previewed window notices by
+            // itself. Nothing here has to remember to clean up.
+            void DrawMenuPreviewControls() {
+                static const char* const kItems[] = { "Nothing", "Songbook",
+                                                      "Results" };
+                FUCK::SeparatorText("On screen");
+                FUCK::Combo("Preview##themeMenusPreview", &_menuPreview,
+                            kItems, 3);
+                switch (_menuPreview) {
+                    case 1:
+                        theme_preview::Keep(
+                            theme_preview::Target::kSongbook);
+                        FUCK::TextDisabled(
+                            "The real Songbook, behind this page. Song rows "
+                            "do nothing while it is a preview.");
+                        break;
+                    case 2:
+                        theme_preview::Keep(
+                            theme_preview::Target::kResults);
+                        FUCK::TextDisabled(
+                            "The real results panel, on a sample run. Its "
+                            "celebration sounds are held while previewing.");
+                        break;
+                    default:
+                        FUCK::TextDisabled(
+                            "These colors dress the Songbook, results, pause "
+                            "and practice panels.");
+                        break;
                 }
-
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x + 16.0f * s, origin.y + 10.0f * s));
-                FUCK::TextColored(t.text, "Five-fret lane palette");
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x + 16.0f * s, origin.y + 124.0f * s));
-                FUCK::TextColored(t.openNote, "Open note");
-                FUCK::SameLine();
-                FUCK::TextColored(t.miss, "Miss");
-                FUCK::SameLine();
-                FUCK::TextColored(t.starPower, "Star Power");
-
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x, hi.y + 8.0f * s));
+                if (_menuPreview != 0 &&
+                    EngineFeed::GetSingleton().active.load(
+                        std::memory_order_acquire)) {
+                    // Both windows force-close on an active feed by design
+                    // (a starting song must not leave either on screen), so
+                    // say so rather than letting the preview look broken.
+                    FUCK::TextColored(
+                        theme::Get().highlight,
+                        "Not shown during a song. Quit to the world, or use "
+                        "the Gameplay/Highway tabs instead.");
+                }
             }
 
-            void DrawHighwayPreview() {
-                const auto& t = theme::Get();
-                const float s = FUCK::Scale(1.0f);
-                const ImVec2 origin = FUCK::GetCursorScreenPos();
-                const float width = std::max(
-                    1.0f, std::min(FUCK::GetContentRegionAvail().x,
-                                   560.0f * s));
-                const float height = 240.0f * s;
-                const ImVec2 hi(origin.x + width, origin.y + height);
-
-                FUCK::DrawRectFilled(
-                    origin, hi,
-                    theme::Mix(t.panel, ImVec4(0,0,0,1), 0.45f),
-                    t.rounding * s * 0.5f);
-
-                auto* i = FUCK::GetInterface();
-                if (i && width > 140.0f * s) {
-                    const float cx = origin.x + width * 0.5f;
-                    const float topY = origin.y + 18.0f * s;
-                    const float bottomY = hi.y - 44.0f * s;
-                    const float topHalf = std::min(54.0f * s, width * 0.16f);
-                    const float bottomHalf = std::min(width * 0.43f,
-                                                      205.0f * s);
-                    const ImVec2 p0(cx - topHalf, topY);
-                    const ImVec2 p1(cx + topHalf, topY);
-                    const ImVec2 p2(cx + bottomHalf, bottomY);
-                    const ImVec2 p3(cx - bottomHalf, bottomY);
-
-                    if (_previewImage) {
-                        i->DrawImageQuad(
-                            _previewImage, p0, p1, p2, p3,
-                            ImVec2(0,0), ImVec2(1,0), ImVec2(1,1),
-                            ImVec2(0,1), t.highwayBackgroundTint);
-                    } else {
-                        i->DrawQuadFilled(
-                            p0, p1, p2, p3,
-                            theme::Mix(t.panel, t.control, 0.35f));
-                    }
-                    i->DrawLine(p0, p3, t.border, 2.0f * s);
-                    i->DrawLine(p1, p2, t.border, 2.0f * s);
-
-                    for (int row = 1; row <= 4; ++row) {
-                        const float f = row / 5.0f;
-                        const float y = topY + (bottomY - topY) * f;
-                        const float hw = topHalf +
-                            (bottomHalf - topHalf) * f;
-                        ImVec4 beat = t.text;
-                        beat.w = 0.18f;
-                        i->DrawLine(ImVec2(cx - hw, y), ImVec2(cx + hw, y),
-                                    beat, s);
-                    }
-
-                    const float laneGap = (bottomHalf * 2.0f) / 5.0f;
-                    for (int lane = 0; lane < 5; ++lane) {
-                        const float x = cx - bottomHalf +
-                            laneGap * (lane + 0.5f);
-                        i->DrawCircleFilled(ImVec2(x, bottomY), 11.0f * s,
-                                            t.fret[lane], 20);
-                    }
+            void DrawHighwayPreviewControls() {
+                FUCK::SeparatorText("On screen");
+                FUCK::Checkbox("Preview the highway##themeHighwayPreview",
+                               &_highwayPreview);
+                if (_highwayPreview) {
+                    theme_preview::Keep(theme_preview::Target::kHighway);
                 }
-
-                FUCK::SetCursorScreenPos(
-                    ImVec2(origin.x, hi.y + 8.0f * s));
+                if (EngineFeed::GetSingleton().active.load(
+                        std::memory_order_acquire)) {
+                    FUCK::TextDisabled(
+                        "Your own song is on screen; edits land on it "
+                        "directly.");
+                } else {
+                    FUCK::TextDisabled(
+                        "The real highway on a short demo phrase, at its "
+                        "true size. Pause a song and reopen this page to "
+                        "tune against your own chart instead.");
+                }
             }
 
             char _backgroundPath[512]{};
             bool _dirty = false;
             bool _backgroundEditingDirty = false;
             bool _saveFailed = false;
-            bool _previewToggle = true;
             double _saveAt = 0.0;
 
+            // Preview targets, per tab. Both default to showing something:
+            // the point of the page is to watch the menu change, and a
+            // preview you have to switch on first is one most people will
+            // never find.
+            int  _menuPreview    = 1;  // index into kItems: Songbook
+            bool _highwayPreview = true;
+
+            // Kept for the Highway tab's size/aspect readout only - the
+            // image itself is now shown by the real background layer.
             void* _previewImage = nullptr;
             bool _previewAttempted = false;
             std::string _previewPath;

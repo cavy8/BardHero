@@ -29,8 +29,8 @@ Atronach Forge, with a spectral skeleton band that plays behind you.
 BardHero currently uses one theme from
 `Data/SKSE/Plugins/BardHero/theme.ini`. The same theme is editable in-game
 through FLICK's **Bard Hero Theme** tool. Changes to menu colors, geometry,
-fret/gameplay colors and highway tint apply immediately and are saved back
-to `theme.ini` automatically.
+fret/gameplay colors, highway tint, highway gradient and highway line colors
+apply immediately and are saved back to `theme.ini` automatically.
 
 The preview is the real menu. Each tab of the editor puts the actual
 BardHero window it themes on screen behind the FLICK menu, at full size, so
@@ -52,8 +52,10 @@ close the FLICK menu and it takes itself down.
 
 The theme intentionally exposes a small set of high-impact choices rather
 than every ImGui/style value: BardHero panel colors and rounding, the core
-gameplay palette (all five frets, open notes, misses and Star Power), and an
-optional highway image. FLICK remains responsible for its own host/sidebar
+gameplay palette (all five frets, open notes, misses and Star Power), and
+focused highway surface controls for the optional image, gradient, border
+rails, strikeline and measure lines. Beat lines derive from the measure-line
+color at lower opacity. FLICK remains responsible for its own host/sidebar
 chrome.
 
 Highway artwork follows the Clone Hero convention: use a 1:2 width:height

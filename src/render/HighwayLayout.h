@@ -116,6 +116,7 @@ namespace SH::hw {
     // return to their ordinary lane colors.
     RGBA VisualNoteColor(const bard::Note& n, int lane, bool missed,
                           bool spActive, bool spPhraseAvailable);
+    RGBA BeatLineColor(bool measure, bool spActive, float z);
     // One gradient quad followed by one continuous quad for each edge rail.
     // This exact shape count prevents strip seams from re-entering the
     // highway surface renderer.

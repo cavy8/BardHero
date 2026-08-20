@@ -184,6 +184,10 @@ namespace SH::RenderUi {
         hw::kOpenColor    = ToRgba(t.openNote);
         hw::kMissGrey     = ToRgba(t.miss);
         hw::kSpActiveCyan = ToRgba(t.starPower);
+        hw::kHighwayGradient = ToRgba(t.highwayGradient);
+        hw::kHighwayBorderLine = ToRgba(t.highwayBorderLine);
+        hw::kHighwayStrikeline = ToRgba(t.highwayStrikeline);
+        hw::kHighwayMeasureLine = ToRgba(t.highwayMeasureLine);
         if (reloadHighwayImage) g_themeHighwayBackground.Refresh();
     }
 

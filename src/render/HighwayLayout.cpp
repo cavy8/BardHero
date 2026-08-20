@@ -165,6 +165,14 @@ namespace SH::hw {
         return lane == bard::kOpenLane ? kOpenColor : kLaneColors[lane];
     }
 
+    RGBA BeatLineColor(bool measure, bool spActive, float z) {
+        RGBA c = spActive ? kSpActiveCyan : kHighwayMeasureLine;
+        const float beatAlpha = 0.18f / 0.34f;
+        c.a = kHighwayMeasureLine.a * (measure ? 1.0f : beatAlpha) *
+              (1.0f - 0.5f * z);
+        return c;
+    }
+
     void EmitSurface(const Style& s, const View& v, bool spActive, int combo,
                      IHighwayRenderer& r) {
         const float cx = v.w * 0.5f;
@@ -176,12 +184,12 @@ namespace SH::hw {
         };
         r.Quad(Sprite::kHighwayFade, floor,
                spActive ? RGBA{ 0.02f, 0.14f, 0.17f, 1.0f }
-                        : RGBA{ 0.05f, 0.05f, 0.09f, 1.0f });
+                        : kHighwayGradient);
 
         const float streak =
             0.6f * (std::min(combo, 50) / 50.0f);
-        RGBA rail = spActive ? RGBA{ 0.10f, 0.92f, 1.00f, 0.92f }
-                             : RGBA{ 0.55f, 0.75f, 0.95f, 0.75f };
+        RGBA rail = spActive ? kSpActiveCyan : kHighwayBorderLine;
+        if (spActive) { rail.a = 0.92f; }
         rail.r += (1.0f - rail.r) * streak;
         rail.g += (1.0f - rail.g) * streak;
         rail.b += (1.0f - rail.b) * streak;

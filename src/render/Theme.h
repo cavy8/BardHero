@@ -28,6 +28,10 @@ namespace SH::theme {
 
         std::string highwayBackground;
         ImVec4 highwayBackgroundTint{ 1, 1, 1, 1 };
+        ImVec4 highwayGradient{ 0.05f, 0.05f, 0.09f, 1.0f };
+        ImVec4 highwayBorderLine{ 0.55f, 0.75f, 0.95f, 0.75f };
+        ImVec4 highwayStrikeline{ 1.00f, 1.00f, 1.00f, 1.0f };
+        ImVec4 highwayMeasureLine{ 1.00f, 1.00f, 1.00f, 0.34f };
 
         ImVec4 fret[5] = {
             { 0.22f, 0.80f, 0.28f, 1.0f },
@@ -139,6 +143,14 @@ namespace SH::theme {
             }
             t.highwayBackgroundTint = ReadColor(
                 ini,"Highway","BackgroundTint",t.highwayBackgroundTint);
+            t.highwayGradient = ReadColor(
+                ini,"Highway","Gradient",t.highwayGradient);
+            t.highwayBorderLine = ReadColor(
+                ini,"Highway","BorderLine",t.highwayBorderLine);
+            t.highwayStrikeline = ReadColor(
+                ini,"Highway","Strikeline",t.highwayStrikeline);
+            t.highwayMeasureLine = ReadColor(
+                ini,"Highway","MeasureLine",t.highwayMeasureLine);
 
             t.fret[0] = ReadColor(ini,"Gameplay","FretGreen",t.fret[0]);
             t.fret[1] = ReadColor(ini,"Gameplay","FretRed",t.fret[1]);
@@ -193,6 +205,10 @@ namespace SH::theme {
         ini.SetValue("Highway", "sBackground",
                      t.highwayBackground.c_str());
         setColor("Highway", "BackgroundTint", t.highwayBackgroundTint);
+        setColor("Highway", "Gradient", t.highwayGradient);
+        setColor("Highway", "BorderLine", t.highwayBorderLine);
+        setColor("Highway", "Strikeline", t.highwayStrikeline);
+        setColor("Highway", "MeasureLine", t.highwayMeasureLine);
 
         static constexpr const char* kFretKeys[5] = {
             "FretGreen", "FretRed", "FretYellow", "FretBlue",

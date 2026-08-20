@@ -321,12 +321,8 @@ namespace SH {
                                           { cx + hwd, y - th },
                                           { cx + hwd, y + th },
                                           { cx - hwd, y + th } };
-                    hw::RGBA c = spActive
-                        ? hw::kSpActiveCyan
-                        : hw::RGBA{ 1.0f, 1.0f, 1.0f, 1.0f };
-                    c.a = (bl.measure ? 0.34f : 0.18f) *
-                          (1.0f - 0.5f * z);
-                    _r.QuadFilled(p, c);
+                    _r.QuadFilled(
+                        p, hw::BeatLineColor(bl.measure, spActive, z));
                 }
             }
 
@@ -404,8 +400,8 @@ namespace SH {
                 // the strikeline breathes with the song (beat pulse)
                 hw::RGBA line = spActive
                     ? hw::kSpActiveCyan
-                    : hw::RGBA{ 1.0f, 1.0f, 1.0f, 1.0f };
-                line.a = 0.45f + 0.25f * _beatPulse;
+                    : hw::kHighwayStrikeline;
+                line.a *= 0.45f + 0.25f * _beatPulse;
                 _r.QuadFilled(bar, line);
                 const float sp = hw::LaneSpacing(st, v, 0.0f);
                 for (int lane = 0; lane < 5; ++lane) {

@@ -233,6 +233,44 @@ static void RunEmitTests() {
             CHECK_NEAR(op.p[3].y, YOf(s, v, 0.0f), 1e-3);
         }
     }
+    {   // theme-driven surface colors: one gradient + two border rails
+        const RGBA oldGradient = kHighwayGradient;
+        const RGBA oldRail = kHighwayBorderLine;
+        kHighwayGradient = RGBA{ 0.12f, 0.18f, 0.24f, 0.66f };
+        kHighwayBorderLine = RGBA{ 0.90f, 0.40f, 0.20f, 0.50f };
+
+        RecordingRenderer r;
+        EmitSurface(s, v, false, 0, r);
+        CHECK(r.ops.size() == 3);
+        CHECK_NEAR(r.ops[0].c.r, kHighwayGradient.r, 1e-6);
+        CHECK_NEAR(r.ops[0].c.a, kHighwayGradient.a, 1e-6);
+        CHECK_NEAR(r.ops[1].c.r, kHighwayBorderLine.r, 1e-6);
+        CHECK_NEAR(r.ops[1].c.g, kHighwayBorderLine.g, 1e-6);
+        CHECK_NEAR(r.ops[1].c.a, kHighwayBorderLine.a, 1e-6);
+
+        kHighwayGradient = oldGradient;
+        kHighwayBorderLine = oldRail;
+    }
+    {   // beat lines are derived from the measure-line theme color
+        const RGBA oldMeasure = kHighwayMeasureLine;
+        kHighwayMeasureLine = RGBA{ 0.80f, 0.60f, 0.40f, 0.50f };
+
+        const RGBA measure = BeatLineColor(true, false, 0.0f);
+        const RGBA beat = BeatLineColor(false, false, 0.0f);
+        CHECK_NEAR(measure.r, kHighwayMeasureLine.r, 1e-6);
+        CHECK_NEAR(measure.g, kHighwayMeasureLine.g, 1e-6);
+        CHECK_NEAR(measure.b, kHighwayMeasureLine.b, 1e-6);
+        CHECK_NEAR(measure.a, 0.50f, 1e-6);
+        CHECK_NEAR(beat.a, 0.50f * (0.18f / 0.34f), 1e-6);
+
+        const RGBA oldSp = kSpActiveCyan;
+        kSpActiveCyan = RGBA{ 0.10f, 0.90f, 1.00f, 1.0f };
+        const RGBA spMeasure = BeatLineColor(true, true, 0.0f);
+        CHECK_NEAR(spMeasure.r, kSpActiveCyan.r, 1e-6);
+        CHECK_NEAR(spMeasure.a, kHighwayMeasureLine.a, 1e-6);
+        kSpActiveCyan = oldSp;
+        kHighwayMeasureLine = oldMeasure;
+    }
     {   // pending green single at the strikeline
         RecordingRenderer r;
         EmitGem(s, v, N(0.0, 0x01), 0.0f, 0, false, false, r);

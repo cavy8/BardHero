@@ -24,6 +24,10 @@ namespace SH::hw {
     inline RGBA kOpenColor    = { 0.72f, 0.40f, 0.95f, 1.0f };
     inline RGBA kMissGrey     = { 0.45f, 0.45f, 0.45f, 0.85f };
     inline RGBA kSpActiveCyan = { 0.10f, 0.92f, 1.00f, 1.0f };
+    inline RGBA kHighwayGradient   = { 0.05f, 0.05f, 0.09f, 1.0f };
+    inline RGBA kHighwayBorderLine = { 0.55f, 0.75f, 0.95f, 0.75f };
+    inline RGBA kHighwayStrikeline = { 1.00f, 1.00f, 1.00f, 1.0f };
+    inline RGBA kHighwayMeasureLine = { 1.00f, 1.00f, 1.00f, 0.34f };
 
     // Corner order everywhere: TL, TR, BR, BL (FUCK::DrawImageQuad order).
     class IHighwayRenderer {

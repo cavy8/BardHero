@@ -248,6 +248,18 @@ namespace SH {
                     ApplyLive();
                 }
 
+                FUCK::SeparatorText("Surface colors");
+                bool changed = false;
+                changed |= EditColor("Gradient", t.highwayGradient);
+                changed |= EditColor("Border lines", t.highwayBorderLine);
+                changed |= EditColor("Bottom line", t.highwayStrikeline);
+                changed |= EditColor("Measure lines", t.highwayMeasureLine);
+                if (changed) {
+                    ApplyLive();
+                }
+                FUCK::TextDisabled(
+                    "Beat lines use the measure-line color with lower alpha.");
+
                 if (FUCK::Button("Reload background image")) {
                     if (_backgroundEditingDirty) {
                         CommitBackgroundPath();

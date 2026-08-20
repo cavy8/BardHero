@@ -27,7 +27,11 @@ namespace SH::hw {
         float tailSec      = 0.25f;   // missed gems live this long past the line
         float gemHalfW     = 0.40f;   // gem half-width / lane spacing
         float gemSquash    = 0.62f;   // gem height / width (perspective ellipse)
-        int   strips       = 16;      // surface strips (spec 9)
+        // Surface strips (spec 9). Each strip is one flat-alpha quad, so
+        // the count IS the resolution of the depth shading: at 16 the
+        // 0.65->0.10 ramp stepped ~0.034 per band and read as horizontal
+        // blocks over a highway background image (field 2026-08-19).
+        int   strips       = 64;
         static Style Default() { return {}; }
     };
 
@@ -38,6 +42,12 @@ namespace SH::hw {
     // line) extends linearly with the strikeline slope so misses slide off
     // at constant speed.
     float ZOf(double u, float depthGain);
+
+    // Inverse of ZOf over the visible span (z in [0,1] -> u in [0,1]).
+    // The textured background needs it: its strips are cut in screen
+    // depth, but its v has to be a function of SONG TIME or the texture
+    // scrolls at a different rate than the notes riding on it.
+    float UOfZ(float z, float depthGain);
 
     float YOf(const Style& s, const View& v, float z);
     float HalfWOf(const Style& s, const View& v, float z);      // px

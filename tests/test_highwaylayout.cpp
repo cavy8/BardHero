@@ -62,6 +62,16 @@ static void RunDepthTests() {
         prev = z;
     }
     CHECK_NEAR(ZOf(-0.1, k), -k * 0.1, 1e-6);  // linear extension below
+
+    // UOfZ inverts ZOf over the visible span. The textured highway
+    // background rides on it: strips are cut in screen depth, but their v
+    // must come back out as song time or the texture scrolls at a rate the
+    // notes on it do not share.
+    CHECK_NEAR(UOfZ(0.0f, k), 0.0, 1e-9);
+    CHECK_NEAR(UOfZ(1.0f, k), 1.0, 1e-6);
+    for (double u = 0.0; u <= 1.0; u += 0.05) {
+        CHECK_NEAR(UOfZ(ZOf(u, k), k), u, 1e-5);
+    }
 }
 
 static void RunLaneTests() {

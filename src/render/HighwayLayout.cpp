@@ -12,6 +12,14 @@ namespace SH::hw {
         return static_cast<float>(k * u / (1.0 + (k - 1.0) * u));
     }
 
+    float UOfZ(float z, float depthGain) {
+        const double k = depthGain;
+        if (z <= 0.0f) return static_cast<float>(z / k);  // ZOf's u<=0 leg
+        // z = k*u / (1 + (k-1)*u)  =>  u = z / (k - (k-1)*z).
+        // k > 1 keeps the denominator >= 1 over z in [0,1].
+        return static_cast<float>(z / (k - (k - 1.0) * z));
+    }
+
     float YOf(const Style& s, const View& v, float z) {
         return v.h * (s.strikeY + (s.horizonY - s.strikeY) * z);
     }

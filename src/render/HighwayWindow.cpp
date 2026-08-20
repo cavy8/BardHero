@@ -308,7 +308,11 @@ namespace SH {
                 for (int i = 0; i < st.strips; ++i) {
                     const float z0 = static_cast<float>(i) / st.strips;
                     const float z1 = static_cast<float>(i + 1) / st.strips;
-                    const float a  = 0.10f + 0.55f * (1.0f - z0);
+                    // Alpha from the strip MIDPOINT, not its near edge:
+                    // the quad is one flat color, so sampling the ramp at
+                    // the middle centers the quantization error instead of
+                    // pushing the whole surface one half-step dark.
+                    const float a  = 0.10f + 0.55f * (1.0f - 0.5f * (z0 + z1));
                     const hw::V2 p[4] = {
                         { cx - hw::HalfWOf(st, v, z1), hw::YOf(st, v, z1) },
                         { cx + hw::HalfWOf(st, v, z1), hw::YOf(st, v, z1) },

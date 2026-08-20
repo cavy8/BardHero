@@ -85,6 +85,53 @@ static void RunLaneTests() {
     CHECK(HalfWOf(s, v, 1.0f) < HalfWOf(s, v, 0.0f));  // converges
 }
 
+static void RunBackgroundUvTests() {
+    const Style s = Style::Default();
+    const View  v{ 1920, 1080 };
+    CHECK_NEAR(HighwayBackgroundPhase(2.5, 2.0), 0.25f, 1e-6);
+    CHECK_NEAR(HighwayBackgroundPhase(-0.5, 2.0), 0.75f, 1e-6);
+    CHECK_NEAR(HighwayBackgroundPhase(3.0, 0.0), 0.0f, 1e-6);
+
+    const float phase = 0.25f;
+    const float cx = v.w * 0.5f;
+    const auto strikeCenter = HighwayBackgroundUvAt(
+        s, v, { cx, YOf(s, v, 0.0f) }, phase);
+    CHECK_NEAR(strikeCenter.x, 0.5f, 1e-6);
+    CHECK_NEAR(strikeCenter.y, 0.75f, 1e-6);
+
+    const auto horizonCenter = HighwayBackgroundUvAt(
+        s, v, { cx, YOf(s, v, 1.0f) }, phase);
+    CHECK_NEAR(horizonCenter.x, 0.5f, 1e-6);
+    CHECK_NEAR(horizonCenter.y, -0.25f, 1e-6);
+
+    for (const float z : { 0.0f, 0.5f, 1.0f }) {
+        const float y = YOf(s, v, z);
+        const float hw = HalfWOf(s, v, z);
+        const auto left = HighwayBackgroundUvAt(
+            s, v, { cx - hw, y }, phase);
+        const auto right = HighwayBackgroundUvAt(
+            s, v, { cx + hw, y }, phase);
+        CHECK_NEAR(left.x, 0.0f, 1e-5);
+        CHECK_NEAR(right.x, 1.0f, 1e-5);
+        CHECK_NEAR(left.y, 1.0f - UOfZ(z, s.depthGain) - phase, 1e-5);
+        CHECK_NEAR(right.y, left.y, 1e-6);
+    }
+
+    // The native shader computes UV from pixel position, so crossing the old
+    // ImGui quad's TL->BR triangle diagonal is continuous instead of jumping
+    // to a different affine interpolation.
+    const V2 diagMid{
+        (cx - HalfWOf(s, v, 1.0f) + cx + HalfWOf(s, v, 0.0f)) * 0.5f,
+        (YOf(s, v, 1.0f) + YOf(s, v, 0.0f)) * 0.5f
+    };
+    const auto a = HighwayBackgroundUvAt(
+        s, v, { diagMid.x - 0.1f, diagMid.y + 0.1f }, phase);
+    const auto b = HighwayBackgroundUvAt(
+        s, v, { diagMid.x + 0.1f, diagMid.y - 0.1f }, phase);
+    CHECK(std::abs(a.x - b.x) < 0.002f);
+    CHECK(std::abs(a.y - b.y) < 0.002f);
+}
+
 static void RunWindowTests() {
     std::vector<bard::Note> notes;
     for (int i = 0; i < 10; ++i) notes.push_back(N(1.0 * i, 0x01));
@@ -458,6 +505,7 @@ static void RunAtlasUvTests() {
 static void RunTests() {
     RunDepthTests();
     RunLaneTests();
+    RunBackgroundUvTests();
     RunWindowTests();
     RunBeatLineTests();
     RunCountdownTests();

@@ -46,6 +46,11 @@ namespace SH::hw {
     float LaneSpacing(const Style& s, const View& v, float z);  // center-to-center px
     float LaneX(const Style& s, const View& v, int lane, float z);  // lane 0..4
 
+    struct SurfaceUv { float x = 0.0f, y = 0.0f; };
+    float     HighwayBackgroundPhase(double visual, double lookahead);
+    SurfaceUv HighwayBackgroundUvAt(const Style& s, const View& v,
+                                    const V2& pixel, float phase);
+
     // Chart notes worth considering around visualTime: [first, last).
     // Backs up by maxSustainSec so a running trail's head note stays in.
     struct NoteRange { std::size_t first = 0, last = 0; };

@@ -37,6 +37,28 @@ namespace SH::hw {
                (static_cast<float>(lane) - 2.0f) * LaneSpacing(s, v, z);
     }
 
+    float HighwayBackgroundPhase(double visual, double lookahead) {
+        if (lookahead <= 0.0) return 0.0f;
+        float phase = static_cast<float>(std::fmod(visual / lookahead, 1.0));
+        if (phase < 0.0f) phase += 1.0f;
+        return phase;
+    }
+
+    SurfaceUv HighwayBackgroundUvAt(const Style& s, const View& v,
+                                    const V2& pixel, float phase) {
+        const float strikeY = YOf(s, v, 0.0f);
+        const float horizonY = YOf(s, v, 1.0f);
+        const float denom = horizonY - strikeY;
+        const float z = denom == 0.0f ? 0.0f : std::clamp(
+            (pixel.y - strikeY) / denom, 0.0f, 1.0f);
+        const float halfW = HalfWOf(s, v, z);
+        const float x = halfW > 0.0f
+            ? 0.5f + (pixel.x - v.w * 0.5f) / (2.0f * halfW)
+            : 0.5f;
+        const float u = UOfZ(z, s.depthGain);
+        return { x, 1.0f - u - phase };
+    }
+
     NoteRange VisibleNotes(const std::vector<bard::Note>& notes,
                            double visualTime, double lookahead,
                            double tailSec, double maxSustainSec) {

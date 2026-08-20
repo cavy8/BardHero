@@ -17,6 +17,7 @@
 #include "render/ThemePreview.h"
 #include "render/ThemeTool.h"
 #include "render/FlickWindowPolicy.h"
+#include "render/HighwaySurfaceD3D.h"
 
 #include <SimpleIni.h>  // CSimpleIniA, referenced by FUCK_API.h (house ordering)
 
@@ -109,6 +110,7 @@ namespace SH::RenderUi {
                 _image = nullptr;
                 _attempted = false;
                 _loadedPath.clear();
+                _surface.Refresh();
             }
 
             void RenderOverlay() override {
@@ -123,9 +125,22 @@ namespace SH::RenderUi {
                 // costs only a string compare per rendered frame.
                 if (_loadedPath != t.highwayBackground) Refresh();
 
+                const ImVec2 disp = FUCK::GetDisplaySize();
+                if (disp.x <= 0.0f || disp.y <= 0.0f) return;
+                const hw::View  v{ disp.x, disp.y };
+                const hw::Style st = hw::Style::Default();
+                const double lookahead = std::clamp(
+                    Settings::GetSingleton().highwayLookaheadSec, 0.3, 5.0);
+                const double visual = BackgroundScrollTime();
+                _loadedPath = t.highwayBackground;
+                if (_surface.RenderBackground(
+                        t.highwayBackground, ToRgba(t.highwayBackgroundTint),
+                        st, v, visual, lookahead)) {
+                    return;
+                }
+
                 if (!_image && !_attempted) {
                     _attempted = true;
-                    _loadedPath = t.highwayBackground;
                     _image = i->LoadImage(t.highwayBackground.c_str(), false);
                     if (!_image) {
                         spdlog::warn(
@@ -145,21 +160,16 @@ namespace SH::RenderUi {
                 }
                 if (!_image) return;
 
-                const ImVec2 disp = FUCK::GetDisplaySize();
-                if (disp.x <= 0.0f || disp.y <= 0.0f) return;
-                const hw::View  v{ disp.x, disp.y };
-                const hw::Style st = hw::Style::Default();
-                const double lookahead = std::clamp(
-                    Settings::GetSingleton().highwayLookaheadSec, 0.3, 5.0);
                 DrawHighwayBackground(
                     _image, t.highwayBackgroundTint, st, v,
-                    BackgroundScrollTime(), lookahead);
+                    visual, lookahead);
             }
 
         private:
             void* _image = nullptr;
             bool _attempted = false;
             std::string _loadedPath;
+            hw::HighwaySurfaceD3D _surface;
         };
 
         ThemeHighwayBackground g_themeHighwayBackground;

@@ -375,6 +375,8 @@ add_commonlibsse_plugin(${PROJECT_NAME}
         src/render/HighwayLayout.cpp
         src/render/FlickRenderer.h
         src/render/FlickRenderer.cpp
+        src/render/HighwaySurfaceD3D.h
+        src/render/HighwaySurfaceD3D.cpp
         src/render/HighwayWindow.h
         src/render/HighwayWindow.cpp
         src/render/FlickWindowPolicy.h
@@ -460,7 +462,8 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE src/PCH.h)
 target_include_directories(${PROJECT_NAME} PRIVATE src extern extern/signalsmith)
 target_link_libraries(${PROJECT_NAME} PRIVATE imgui::imgui bardcore
     Opus::opus "${OPUSFILE_LIBRARY}" "${OGG_LIBRARY}" "${OPUSENC_LIBRARY}"
-    mfplat mfreadwrite mfuuid wmcodecdspuuid ole32)
+    mfplat mfreadwrite mfuuid wmcodecdspuuid ole32 d3d11 d3dcompiler
+    windowscodecs)
 target_compile_definitions(${PROJECT_NAME} PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
 
 if(NOT DEFINED OUTPUT_FOLDER)

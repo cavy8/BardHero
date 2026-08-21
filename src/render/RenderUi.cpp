@@ -36,9 +36,8 @@ namespace SH::RenderUi {
             return { c.x, c.y, c.z, c.w };
         }
 
-        // FLICK currently exposes a whole textured quad, but not its active
-        // ImDrawList or a textured-mesh primitive. Keep this on the supported
-        // renderer API: borrowing another overlay's ImGui context crashes.
+        // Use FLICK's textured quad API; borrowing another ImGui context
+        // is unsafe.
         void DrawHighwayBackground(void* image, const ImVec4& tint,
                                    const hw::Style& st, const hw::View& v,
                                    double visual, double lookahead) {
@@ -62,14 +61,7 @@ namespace SH::RenderUi {
                 ImVec2(0.0f, 1.0f - phase), tint);
         }
 
-        // Scaled (never stretched), centered, nothing drawn in the leftover
-        // margin - whatever sits beneath just shows through. Used by every
-        // full-screen decorative layer that ends up needing FLICK's own
-        // image quad: the fallback path for the two manual-D3D layers when
-        // no D3D device is available, and the always-FLICK path for the
-        // topmost layer, which must land above FLICK's own ImGui-drawn
-        // highway content - a manual D3D draw can only land before that
-        // content is flushed each frame, never after.
+        // Fit and center a full-screen image without stretching.
         void DrawScaledImage(void* image, const ImVec4& tint,
                              const hw::View& v) {
             auto* i = FUCK::GetInterface();
@@ -110,13 +102,7 @@ namespace SH::RenderUi {
                    theme_preview::Is(theme_preview::Target::kHighway);
         }
 
-        // Shared body for the underlay and midlayer windows: manual D3D
-        // first (see HighwayFullscreenLayerD3D), FLICK's own DrawImageQuad
-        // as a fallback when no D3D device is available. Both layers land
-        // before FLICK's ImGui frame is flushed either way, so which path
-        // rendered doesn't disturb their stacking relative to each other
-        // or to the highway background image - only registration order
-        // (see Register() below) does that.
+        // Underlay and midlayer share D3D rendering with an image-quad fallback.
         class FullscreenLayerLogic {
         public:
             void Refresh() {
@@ -179,10 +165,7 @@ namespace SH::RenderUi {
             }
             bool IsOpen() const override {
                 if (theme::Get().highwayBackground.empty()) return false;
-                // The theme editor's highway preview is composited on the
-                // real background for the same reason it uses the real
-                // trapezoid: a tint judged against a blank surface is a
-                // tint judged against something no player will ever see.
+                // Preview the highway on the same background used in gameplay.
                 return EngineFeed::GetSingleton().active.load(
                            std::memory_order_acquire) ||
                        theme_preview::Is(theme_preview::Target::kHighway);
@@ -220,10 +203,7 @@ namespace SH::RenderUi {
                 auto* i = FUCK::GetInterface();
                 if (!i) return;
 
-                // If a caller changed the mutable path but forgot to request
-                // an explicit refresh, fail safe by noticing it here. The
-                // editor normally refreshes on field commit, so this branch
-                // costs only a string compare per rendered frame.
+                // Refresh if the mutable path changed without an explicit request.
                 if (_loadedPath != t.highwayBackground) Refresh();
 
                 const ImVec2 disp = FUCK::GetDisplaySize();
@@ -350,18 +330,8 @@ namespace SH::RenderUi {
         };
         ThemeHighwayMidlayer g_themeHighwayMidlayer;
 
-        // Over everything else BardHero draws while the highway is
-        // showing (background image, gems/trails/HUD/banners/pause dim).
-        // Unlike the other two layers this can't use manual D3D at all:
-        // a raw draw from RenderOverlay() always lands before FLICK's own
-        // ImGui frame is flushed, i.e. always UNDER that ImGui content, so
-        // getting above it means going through FLICK's own DrawImageQuad
-        // instead, registered last (see Register()) so its draw call is
-        // the final one FLICK composites among BardHero's own windows. A
-        // genuinely focused FLICK panel (pause menu, settings, theme
-        // tool) still comes forward over it via FLICK's normal focus
-        // rules, same relationship the highway's own content already has
-        // with those panels.
+        // The overlay must sit above BardHero's ImGui highway content, so it
+        // uses FLICK's image quad and is registered last.
         class ThemeHighwayOverlayTop final : public FUCK::IWindow {
         public:
             const char* Id() const override {
@@ -449,11 +419,8 @@ namespace SH::RenderUi {
 
     void Register() {
         ApplyTheme(true);
-        // Registration order is what sets the base stacking of the three
-        // decorative layers around the highway (see each class's comment
-        // for why): underlay, then the highway background, then midlayer,
-        // then all of BardHero's own ImGui-drawn highway content, then
-        // every other BardHero panel, then the overlay last of all.
+        // Registration order: underlay, background, midlayer, highway content,
+        // panels, then overlay.
         FUCK::RegisterWindow(&g_themeHighwayUnderlay);
         FUCK::RegisterWindow(&g_themeHighwayBackground);
         FUCK::RegisterWindow(&g_themeHighwayMidlayer);

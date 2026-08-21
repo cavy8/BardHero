@@ -79,9 +79,7 @@ namespace SH {
                 const double    lookahead = std::clamp(
                     Settings::GetSingleton().highwayLookaheadSec, 0.3, 5.0);
 
-                // A song outranks a preview: while one is running the editor
-                // tunes against the player's own chart, which is the better
-                // preview and the one the tab points them at.
+                // A live song takes precedence over the demo preview.
                 if (!live) {
                     RenderPreview(st, view, lookahead);
                     return;
@@ -150,27 +148,15 @@ namespace SH {
             }
 
         private:
-            // ---- theme editor preview -------------------------------------
-            // The editor's Gameplay/Highway tabs put the SHIPPED highway on
-            // screen when no song is running: same Style, same View, same
-            // emission helpers, same sprite atlas, same full-screen
-            // geometry, and the real background layer underneath. The only
-            // invented thing is the chart, because with no session there is
-            // nothing to read one from.
-            //
-            // What it deliberately does not do is manufacture a
-            // GuitarEngine/MasterClock and publish them into EngineFeed.
-            // Judgment, sustain and Star Power arrive as data per note
-            // instead, so a preview cannot perturb a real session's feed -
-            // which is also why this branch runs only while `active` is
-            // false, a running song being the better preview anyway.
-            static constexpr double kPreviewPhraseSec = 4.0;   // 2 bars @120
-            static constexpr int    kPreviewReps      = 6;     // 24s of it
+            // The editor uses the normal highway renderer with a small demo
+            // chart. It does not create or publish a gameplay engine.
+            static constexpr double kPreviewPhraseSec = 4.0;   // 2 bars at 120 BPM
+            static constexpr int    kPreviewReps      = 6;     // 24 seconds
 
             struct PreviewChart {
                 bard::ParsedChart chart;
                 std::vector<int>  judgment;  // 0 pending, 2 missed
-                std::vector<char> spPhrase;  // vector<bool> has no data()
+                std::vector<char> spPhrase;  // char provides data()
                 double            maxSustain = 0.0;
             };
 
@@ -182,11 +168,8 @@ namespace SH {
                     int          judgment;
                     bool         sp;
                 };
-                // One phrase, chosen so every color the two tabs can edit
-                // is on screen at once: the five lanes in a sweep, a chord
-                // with trails, a missed note (the grey has to stay legible
-                // beside the lane colors it sits among), a Star Power pair,
-                // and an open strum.
+                // Cover all editable states: five lanes, a chord, a miss,
+                // Star Power, sustain, and an open strum.
                 static const Seed kPhrase[] = {
                     { 0.00, bard::LaneBit(0), 0.00, 0, false },
                     { 0.25, bard::LaneBit(1), 0.00, 0, false },
@@ -216,14 +199,12 @@ namespace SH {
                         n.tick = static_cast<std::uint32_t>(
                             p.chart.tempo.TickAt(n.time) + 0.5);
                         n.mask = s.mask;
-                        // VisualNoteColor gates the cyan on a real phrase
-                        // index as well as the availability flag, so a
-                        // preview SP note needs both.
+                        // Star Power color needs both the phrase index and flag.
                         n.spPhrase = s.sp ? 0 : -1;
                         for (int lane = 0; lane < bard::kLaneCount; ++lane) {
                             if (!(s.mask & bard::LaneBit(lane))) continue;
                             if (s.sustain <= 0.0) continue;
-                            n.sustainTicks[lane] = 1;  // nonzero = has one
+                            n.sustainTicks[lane] = 1;  // nonzero means sustain
                             n.sustainEnd[lane]   = n.time + s.sustain;
                         }
                         p.chart.notes.push_back(n);
@@ -243,11 +224,7 @@ namespace SH {
             void RenderPreview(const hw::Style& st, const hw::View& v,
                                double lookahead) {
                 const auto& p = Preview();
-                // Scroll inside the generated reps rather than from zero, so
-                // there is always a full lookahead of chart ahead of the
-                // camera and a tail behind it and the loop point never
-                // shows as a gap. Two spare phrases each side covers the
-                // widest lookahead the setting allows.
+                // Start inside the repeated phrase to keep the highway full.
                 const double visual =
                     kPreviewPhraseSec * 2.0 +
                     std::fmod(QpcSec(), kPreviewPhraseSec);
@@ -267,8 +244,7 @@ namespace SH {
                 const auto range = hw::VisibleNotes(
                     chart.notes, visual, lookahead, st.tailSec,
                     p.maxSustain);
-                // Trails under, strikeline, then gems on top - the live
-                // path's order, so the preview stacks the way gameplay does.
+                // Match gameplay order: trails, strikeline, then gems.
                 for (std::size_t i = range.first; i < range.last; ++i) {
                     const auto& n = chart.notes[i];
                     const bool  missed = p.judgment[i] == 2;
@@ -285,8 +261,7 @@ namespace SH {
                                       tint, _r);
                     }
                 }
-                // No held frets: nothing is playing this, and a preview that
-                // lit fret rings would be claiming otherwise.
+                // The demo has no held frets.
                 DrawStrikeline(st, v, 0, rich, false);
                 for (std::size_t i = range.last; i-- > range.first;) {
                     const auto&  n = chart.notes[i];
@@ -385,9 +360,7 @@ namespace SH {
                 }
             }
 
-            // Takes the held-fret bits rather than the feed: they are the
-            // only thing it ever read out of one, and the theme preview has
-            // no feed to hand it.
+            // The preview has no engine feed; use the held-fret mask only.
             void DrawStrikeline(const hw::Style& st, const hw::View& v,
                                 std::uint8_t held, bool rich, bool spActive) {
                 const float cx = v.w * 0.5f;

@@ -6,19 +6,8 @@
 #include <string_view>
 
 namespace SH::hw {
-    // Draws one image scaled (never stretched) to fit the current screen,
-    // centered, with nothing drawn in the leftover margin - whatever sits
-    // beneath just shows through. Manual D3D11, same reasoning as
-    // HighwaySurfaceD3D: a raw draw issued from a FUCK::IWindow's
-    // RenderOverlay() always lands on the render target before FLICK's own
-    // ImGui frame is flushed that frame, so two manual-D3D layers drawn in
-    // sequence stack the same way relative to each other and to the
-    // (also manual-D3D) highway background image, and both stay under
-    // every FLICK-drawn (ImGui) highway visual - gems, HUD, banners.
-    //
-    // Backs the underlay and midlayer theme layers (see RenderUi.cpp); the
-    // overlay layer needs to sit ABOVE that ImGui content instead, which a
-    // manual draw can't reach, so it goes through FLICK's DrawImageQuad.
+    // Render an image scaled to fit the screen. Manual D3D draws land below
+    // FLICK's ImGui content, so this is used for underlay and midlayer only.
     class HighwayFullscreenLayerD3D final {
     public:
         HighwayFullscreenLayerD3D();

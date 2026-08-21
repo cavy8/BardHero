@@ -38,9 +38,7 @@ namespace SH::hw {
         kFlameFb0     = 50,  // flame flipbook, kFlameFbFrames cells 50-53
         kEmber        = 54,  // irregular ember blob (fountain)
         kNeedle       = 55,  // long thin streak (rot = velocity angle)
-        // Highway floor depth-fade. FlickRenderer special-cases this sprite
-        // to the full-resolution highway_fade.png; the atlas-sized version
-        // quantizes into fixed horizontal bands when stretched.
+        // Highway floor depth-fade uses the full-resolution fade texture.
         kHighwayFade  = 56,
     };
 

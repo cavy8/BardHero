@@ -25,8 +25,7 @@ namespace SH::hw {
         auto* i = FUCK::GetInterface();
         if (!i) return false;
         if (!_atlas) {
-            // While missing, retry only every 120th call (no per-frame disk
-            // probe); the error is logged once.
+            // Retry missing assets periodically instead of probing every frame.
             if (_loggedMissing) {
                 if (++_retryCounter < 120) return false;
                 _retryCounter = 0;
@@ -58,8 +57,7 @@ namespace SH::hw {
                     ImVec2(0.0f, 0.0f), ImVec2(1.0f, 0.0f),
                     ImVec2(1.0f, 1.0f), ImVec2(0.0f, 1.0f), IC(tint));
             } else {
-                // Missing optional render asset: retain one whole shape and
-                // never fall back to the visibly banded low-res atlas cell.
+                // Keep one shape when the optional asset is missing.
                 RGBA solid = tint;
                 solid.a *= 0.38f;
                 i->DrawQuadFilled(IV(p[0]), IV(p[1]), IV(p[2]), IV(p[3]),

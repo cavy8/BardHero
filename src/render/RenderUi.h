@@ -8,9 +8,7 @@
 namespace SH::RenderUi {
     void Register();  // all M4 windows; call after FUCK::Connect succeeds
 
-    // Re-apply the mutable theme palette to BardHero-owned UI/gameplay
-    // colors. reloadHighwayImage releases/reloads the optional background
-    // texture, so the FLICK theme editor can switch paths without a restart.
+    // Apply the theme palette and optionally reload highway images.
     void ApplyTheme(bool reloadHighwayImage = false);
 
     void AcquireCursor();

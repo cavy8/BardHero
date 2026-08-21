@@ -27,19 +27,10 @@ namespace SH {
     namespace {
         constexpr ImVec4 kEarnedGold{ 0.96f, 0.73f, 0.20f, 1.0f };
 
-        // The sample run the theme editor poses this panel on. Deliberately
-        // a run that lights EVERY themed element at once - a new best, a
-        // known purse, a rank that moved, a star count short of five so both
-        // the earned and unearned pips are on screen - because a preview
-        // that only shows half the panel is how the other half ends up
-        // unreadable in a theme nobody checked it against.
-        //
-        // stingCue/-1 and clearSting/false are load-bearing: the first-draw
-        // celebration audio is keyed on them, and a preview must not fire
-        // song-end stings at somebody sitting in a menu.
+        // Sample data covers every themed result state without playing audio.
         UiBus::Results PreviewResults() {
             UiBus::Results r;
-            r.songName   = "Theme Preview";
+            r.songName   = "Theme preview";
             r.artist     = "Bard Hero";
             r.score      = 148250;
             r.notesHit   = 476;
@@ -201,26 +192,15 @@ namespace SH {
             const char* Id() const override { return "ResultsV13"; }
             const char* Title() const override { return "Results"; }
             bool        IsOpen() const override {
-                // Theme editor preview. Deliberately does NOT go through
-                // StageResults/resultsReady: that path owns a real run's
-                // snapshot and the FLICK open gate, and a preview has no
-                // business touching either. This window simply agrees to be
-                // open for its own reason and to snapshot itself.
-                //
-                // EDGE-triggered like the Songbook's: dismissing the preview
-                // with CONTINUE has to stay dismissed rather than be
-                // reopened by this poll on the very next frame.
+                // Preview results use local sample data, not the live bus.
+                // Edge semantics keep a dismissed preview closed.
                 {
                     const bool want = theme_preview::Is(
                         theme_preview::Target::kResults);
                     auto* self = const_cast<ResultsWindow*>(this);
                     if (want && !_previewArmed) {
                         self->_previewArmed = true;
-                        // Never over a REAL panel. A player's own results
-                        // are the better preview anyway, and claiming one
-                        // as a preview would mean ending the preview
-                        // dismissed their run's box for them. A running
-                        // session closes this window in Draw regardless.
+                        // Never replace a real results panel; live runs own it.
                         if (!UiBus::GetSingleton().resultsReady.load() &&
                             !EngineFeed::GetSingleton().active.load(
                                 std::memory_order_acquire)) {
@@ -329,16 +309,8 @@ namespace SH {
                     _nextHoldFlameAt = 0.0;
                     _lastPingedStar  = -1;
                     _burstsFired     = 0;
-                    // A preview opens SETTLED. The phrase slam, the score
-                    // count-up and its looped tick, the star pings and the
-                    // flame bursts are all driven off _openedAt and these
-                    // two counters, so backdating past the whole timeline
-                    // does two jobs at once: it puts the finished panel on
-                    // screen immediately - nobody tuning a color wants to
-                    // sit through a 1.4s slam on every open - and it leaves
-                    // no audio or particle site with a frame to fire on.
-                    // _prevFxT deliberately keeps the REAL now, so the
-                    // particle step does not see a ten-second delta.
+                    // Open previews settled so editors see the finished panel
+                    // immediately and no celebration effect fires.
                     if (_previewOpen) {
                         _openedAt -= 10.0;
                         _lastPingedStar = 5;  // past every pip
@@ -813,10 +785,7 @@ namespace SH {
             void Close() {
                 UiBus::GetSingleton().CloseResults();
                 _snapHeld = false;
-                // Only the OPEN half of the preview latch. _previewArmed
-                // stays as it is so that dismissing a preview with CONTINUE
-                // does not immediately re-arm it in IsOpen; the editor's own
-                // control is what reopens one.
+                // Close only the active preview; the editor controls rearming.
                 _previewOpen = false;
                 _openedAt = 0.0;
                 // Every dismissal path, including the new-session bail at
@@ -832,9 +801,7 @@ namespace SH {
             UiBus::Results _snap;
             bool           _snapHeld = false;
             bool           _cursorHeld = false;
-            // Theme preview latch: _armed mirrors the editor's request with
-            // edge semantics, _open says this particular open is a preview
-            // (and so is snapshotted from PreviewResults, not the bus).
+            // _previewOpen selects local sample data instead of the results bus.
             bool           _previewArmed = false;
             bool           _previewOpen  = false;
             double         _openedAt = 0.0;

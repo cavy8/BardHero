@@ -33,12 +33,7 @@ namespace SH::theme {
         ImVec4 highwayStrikeline{ 1.00f, 1.00f, 1.00f, 1.0f };
         ImVec4 highwayMeasureLine{ 1.00f, 1.00f, 1.00f, 0.34f };
 
-        // Three optional full-screen decorative layers, each scaled (never
-        // stretched) to fit the screen with letterbox/pillarbox bars, shown
-        // only while the highway itself is showing. Underlay sits below
-        // even the highway background image; midlayer sits above that
-        // image but below the highway's own gems/HUD/banners; overlay sits
-        // above all of that highway content.
+        // Optional full-screen layers are scaled to fit without stretching.
         std::string highwayUnderlay;
         ImVec4 highwayUnderlayTint{ 1, 1, 1, 1 };
         std::string highwayMidlayer;
@@ -213,8 +208,7 @@ namespace SH::theme {
         const auto& t = Get();
         CSimpleIniA ini;
         ini.SetUnicode();
-        // Preserve the shipped comments/order where possible. A missing file
-        // is also fine: SimpleIni will write the UI-owned keys from scratch.
+        // Missing files are fine; SimpleIni writes the theme keys on save.
         ini.LoadFile(kThemeIniPath);
 
         const auto setColor = [&](const char* section, const char* key,

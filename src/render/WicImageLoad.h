@@ -1,8 +1,6 @@
 #pragma once
 
-// WIC file -> top-down RGBA8 pixel buffer. The one place this decode runs;
-// every manual-D3D highway layer (background, underlay, midlayer) calls
-// through here instead of carrying its own copy of the WIC boilerplate.
+// Decode a WIC image into a top-down RGBA8 buffer for the D3D highway layers.
 
 #include <cstdint>
 #include <string_view>

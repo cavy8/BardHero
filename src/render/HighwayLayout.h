@@ -38,7 +38,7 @@ namespace SH::hw {
     // at constant speed.
     float ZOf(double u, float depthGain);
 
-    // Inverse of ZOf over the visible span (z in [0,1] -> u in [0,1]).
+    // Inverse of ZOf over the visible span.
     float UOfZ(float z, float depthGain);
 
     float YOf(const Style& s, const View& v, float z);
@@ -117,9 +117,7 @@ namespace SH::hw {
     RGBA VisualNoteColor(const bard::Note& n, int lane, bool missed,
                           bool spActive, bool spPhraseAvailable);
     RGBA BeatLineColor(bool measure, bool spActive, float z);
-    // One gradient quad followed by one continuous quad for each edge rail.
-    // This exact shape count prevents strip seams from re-entering the
-    // highway surface renderer.
+    // One gradient quad and one continuous rail quad per edge.
     void EmitSurface(const Style& s, const View& v, bool spActive, int combo,
                      IHighwayRenderer& r);
     void EmitGem(const Style& s, const View& v, const bard::Note& n, float z,

@@ -93,10 +93,7 @@ float4 PSMain(VSOut input) : SV_Target {
             return true;
         }
 
-        // Device state save/restore around one manual draw call. Mirrors
-        // HighwaySurfaceD3D's backup exactly (same reasoning: this runs
-        // inside FLICK's own frame, so it must hand the pipeline back
-        // exactly as it found it).
+        // Save and restore D3D state around the manual draw.
         class D3DStateBackup {
         public:
             explicit D3DStateBackup(ID3D11DeviceContext* context) :
@@ -558,9 +555,7 @@ float4 PSMain(VSOut input) : SV_Target {
         const D3D11_VIEWPORT vp = state.FirstViewport(view);
         if (vp.Width <= 0.0f || vp.Height <= 0.0f) return false;
 
-        // Scale to fit, never stretch: pick the smaller of the two axis
-        // scales so the whole image lands on screen, then center it.
-        // Nothing is drawn in the leftover margin.
+        // Scale the image to fit and center it without stretching.
         const float scale = std::min(
             vp.Width / static_cast<float>(_impl->texWidth),
             vp.Height / static_cast<float>(_impl->texHeight));

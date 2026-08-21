@@ -12,8 +12,7 @@ namespace SH::hw {
     struct V2   { float x = 0, y = 0; };
     struct RGBA { float r = 1, g = 1, b = 1, a = 1; };
 
-    // Runtime palette values. Defaults preserve the established BardHero
-    // colors, while the single theme.ini can override them at UI startup.
+    // Runtime palette values, initialized from theme.ini at startup.
     inline RGBA kLaneColors[5] = {
         { 0.22f, 0.80f, 0.28f, 1.0f },
         { 0.90f, 0.22f, 0.20f, 1.0f },

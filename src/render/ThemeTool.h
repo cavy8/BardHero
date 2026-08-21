@@ -1,18 +1,7 @@
 #pragma once
 
-// FLICK-native editor for the one BardHero theme. This intentionally lives
-// as a separate ITool instead of inflating SettingsTool.cpp: it owns image
-// preview lifetime, live application, and theme.ini persistence while the
-// ordinary settings page remains gameplay/configuration focused.
-//
-// The preview is the REAL menu. Each tab publishes a theme_preview::Target
-// every frame and the shipped windows put themselves on screen behind this
-// page (FLICK draws its menu over registered IWindows - see
-// PauseMenuWindow.cpp, which routes to this very menu mid-song for exactly
-// that reason). Mock swatches drawn in this panel were the earlier design
-// and were wrong in the way every mock is wrong: they showed a panel this
-// file had to keep in step with BrowserWindow/ResultsWindow/HighwayWindow
-// by hand, at a size and against a backdrop the player never sees.
+// FLICK tool for editing the BardHero theme. It owns live application,
+// previews, and theme.ini persistence. Previews use the real BardHero windows.
 
 #include <SimpleIni.h>
 #include "FUCK_API.h"
@@ -28,14 +17,7 @@
 
 namespace SH {
     namespace theme_tool {
-        // Per-field editing state for one theme-owned image path: a text
-        // buffer synced from the model, a "committed on blur" dirty flag
-        // (reloading through FLICK on every keystroke would be both noisy
-        // and expensive), and enough of a preview load to show the user
-        // what actually loaded. Shared by the three decorative highway
-        // layers (underlay/midlayer/overlay) - the highway background
-        // keeps its own hand-written copy of this same shape since it
-        // also carries a 1:2 aspect warning these layers don't need.
+        // Editable path state and its preview image for a decorative layer.
         struct LayerFieldState {
             char path[512]{};
             bool editingDirty = false;
@@ -105,13 +87,11 @@ namespace SH {
                 MaybeSave();
 
                 FUCK::TextDisabled(
-                    "Edits the single BardHero theme. Each tab puts the real "
-                    "menu it themes on screen behind this page, so what you "
-                    "see is the finished result. Color and geometry changes "
-                    "apply immediately; the highway image reloads when its "
-                    "path edit is committed.");
+                    "Edit the BardHero theme. Preview tabs show the real "
+                    "menu or highway behind this panel. Color and geometry "
+                    "changes apply immediately; image paths reload on commit.");
 
-                if (FUCK::Button("Save now")) {
+                if (FUCK::Button("Save")) {
                     SaveNow();
                 }
                 FUCK::SameLine();
@@ -131,7 +111,7 @@ namespace SH {
                     _saveFailed = false;
                 }
                 FUCK::SameLine();
-                if (FUCK::Button("Reset theme defaults")) {
+                if (FUCK::Button("Reset defaults")) {
                     theme::ResetDefaults();
                     SyncBackgroundBuffer();
                     _underlay.Sync(theme::Get().highwayUnderlay);
@@ -148,11 +128,12 @@ namespace SH {
                 if (_saveFailed) {
                     FUCK::TextColored(
                         ImVec4(0.95f, 0.35f, 0.30f, 1.0f),
-                        "Could not save theme.ini; check the log/path permissions.");
+                        "Could not save theme.ini. Check the path and "
+                        "permissions.");
                 } else if (_dirty || AnyLayerPathEditingDirty()) {
-                    FUCK::TextDisabled("Unsaved theme changes.");
+                    FUCK::TextDisabled("Unsaved changes.");
                 } else {
-                    FUCK::TextDisabled("Theme saved.");
+                    FUCK::TextDisabled("Saved.");
                 }
 
                 if (FUCK::BeginTabBar("##BardHeroThemeTabs")) {
@@ -196,8 +177,7 @@ namespace SH {
                 QueueSave();
             }
 
-            // Same shape as CommitBackgroundPath, generalized over which
-            // theme string a decorative layer's field edits.
+            // Commit a decorative layer path and refresh its preview.
             void CommitLayerPath(LayerFieldState& field, std::string& target) {
                 if (!field.editingDirty) return;
                 target = field.path;
@@ -224,8 +204,7 @@ namespace SH {
             }
 
             void SaveNow() {
-                // Clicking Save or closing FLICK is also a field commit, so a
-                // path typed without tabbing away is never silently lost.
+                // Save and close commit any active path edit.
                 CommitBackgroundPath();
                 CommitLayerPath(_underlay, theme::Mutable().highwayUnderlay);
                 CommitLayerPath(_midlayer, theme::Mutable().highwayMidlayer);
@@ -327,16 +306,13 @@ namespace SH {
                         sizeof(_backgroundPath))) {
                     _backgroundEditingDirty = true;
                 }
-                // Loading half-typed filenames through FLICK every keypress
-                // is both noisy and expensive. Commit as soon as the edit is
-                // finished; every color/geometry control remains truly live.
+                // Avoid reloading the image on every keystroke.
                 if (FUCK::IsItemDeactivatedAfterEdit()) {
                     CommitBackgroundPath();
                 }
                 FUCK::TextDisabled(
-                    "Clone Hero standard is 1:2 width:height, e.g. "
-                    "512x1024 or 1024x2048. It scrolls with the notes; "
-                    "top and bottom should meet cleanly.");
+                    "Use a 1:2 image, such as 512x1024. It scrolls with the "
+                    "notes; the top and bottom should connect.");
 
                 if (EditColor("Background tint", t.highwayBackgroundTint)) {
                     ApplyLive();
@@ -346,15 +322,15 @@ namespace SH {
                 bool changed = false;
                 changed |= EditColor("Gradient", t.highwayGradient);
                 changed |= EditColor("Border lines", t.highwayBorderLine);
-                changed |= EditColor("Bottom line", t.highwayStrikeline);
+                changed |= EditColor("Strikeline", t.highwayStrikeline);
                 changed |= EditColor("Measure lines", t.highwayMeasureLine);
                 if (changed) {
                     ApplyLive();
                 }
                 FUCK::TextDisabled(
-                    "Beat lines use the measure-line color with lower alpha.");
+                    "Beat lines use the measure-line color at lower opacity.");
 
-                if (FUCK::Button("Reload background image")) {
+                if (FUCK::Button("Reload background")) {
                     if (_backgroundEditingDirty) {
                         CommitBackgroundPath();
                     } else {
@@ -364,11 +340,11 @@ namespace SH {
                 }
 
                 if (t.highwayBackground.empty()) {
-                    FUCK::TextDisabled("No custom highway image selected.");
+                    FUCK::TextDisabled("No highway background selected.");
                 } else if (!_previewImage && _previewAttempted) {
                     FUCK::TextColored(
                         t.miss,
-                        "Image could not be loaded. The current path is kept.");
+                        "Could not load image. Keeping the current path.");
                 } else if (_previewImage) {
                     const bool aspectOk =
                         _previewW > 0.0f && _previewH > 0.0f &&
@@ -386,29 +362,22 @@ namespace SH {
 
                 DrawLayerField(
                     "Underlay image",
-                    "Drawn below everything, including the background "
-                    "image above.",
+                    "Drawn below the highway background.",
                     "Underlay", _underlay, t.highwayUnderlay,
                     t.highwayUnderlayTint);
                 DrawLayerField(
                     "Midlayer image",
-                    "Drawn above the background image, below the note "
-                    "highway itself (gems, trails, HUD, banners).",
+                    "Drawn between the background and highway effects.",
                     "Midlayer", _midlayer, t.highwayMidlayer,
                     t.highwayMidlayerTint);
                 DrawLayerField(
                     "Overlay image",
-                    "Drawn above everything else the highway shows.",
+                    "Drawn above the highway.",
                     "Overlay", _overlay, t.highwayOverlay,
                     t.highwayOverlayTint);
             }
 
-            // Shared by the three decorative highway layers (underlay,
-            // midlayer, overlay): a path field committed on blur, a tint,
-            // a manual reload button and a loaded-size readout. Unlike the
-            // background image these are scaled to fit the screen rather
-            // than mapped onto the highway trapezoid, so there is no
-            // aspect-ratio expectation to warn about - any image works.
+            // Draw one full-screen decorative layer editor.
             void DrawLayerField(const char* sectionTitle, const char* hint,
                                 const char* idSuffix, LayerFieldState& field,
                                 std::string& target, ImVec4& tint) {
@@ -425,8 +394,8 @@ namespace SH {
                 }
                 FUCK::TextDisabled("%s", hint);
                 FUCK::TextDisabled(
-                    "Scaled (never stretched) to fit the screen; any "
-                    "aspect ratio works.");
+                    "Fits the screen without stretching; any aspect ratio "
+                    "works.");
 
                 char tintId[32];
                 std::snprintf(tintId, sizeof(tintId), "Tint##%s", idSuffix);
@@ -449,23 +418,18 @@ namespace SH {
                 } else if (!field.previewImage && field.previewAttempted) {
                     FUCK::TextColored(
                         theme::Get().miss,
-                        "Image could not be loaded. The current path is "
-                        "kept.");
+                        "Could not load image. Keeping the current path.");
                 } else if (field.previewImage) {
                     FUCK::TextDisabled("Loaded %.0fx%.0f",
                                        field.previewW, field.previewH);
                 }
             }
 
-            // Both of these publish EVERY frame the tab is drawn rather than
-            // on change. That is what makes the heartbeat in ThemePreview.h
-            // work: switching tabs, switching tools or closing the menu all
-            // stop the publishing, and the previewed window notices by
-            // itself. Nothing here has to remember to clean up.
+            // Publish the target every frame so the heartbeat can expire it.
             void DrawMenuPreviewControls() {
                 static const char* const kItems[] = { "Nothing", "Songbook",
                                                       "Results" };
-                FUCK::SeparatorText("On screen");
+                FUCK::SeparatorText("Preview");
                 FUCK::Combo("Preview##themeMenusPreview", &_menuPreview,
                             kItems, 3);
                 switch (_menuPreview) {
@@ -473,38 +437,35 @@ namespace SH {
                         theme_preview::Keep(
                             theme_preview::Target::kSongbook);
                         FUCK::TextDisabled(
-                            "The real Songbook, behind this page. Song rows "
-                            "do nothing while it is a preview.");
+                            "The real Songbook behind this panel. Song rows "
+                            "are disabled in preview mode.");
                         break;
                     case 2:
                         theme_preview::Keep(
                             theme_preview::Target::kResults);
                         FUCK::TextDisabled(
-                            "The real results panel, on a sample run. Its "
-                            "celebration sounds are held while previewing.");
+                            "The real results panel with a settled sample run. "
+                            "Celebration sounds are disabled.");
                         break;
                     default:
                         FUCK::TextDisabled(
-                            "These colors dress the Songbook, results, pause "
+                            "These colors apply to the Songbook, results, pause, "
                             "and practice panels.");
                         break;
                 }
                 if (_menuPreview != 0 &&
                     EngineFeed::GetSingleton().active.load(
                         std::memory_order_acquire)) {
-                    // Both windows force-close on an active feed by design
-                    // (a starting song must not leave either on screen), so
-                    // say so rather than letting the preview look broken.
                     FUCK::TextColored(
                         theme::Get().highlight,
-                        "Not shown during a song. Quit to the world, or use "
-                        "the Gameplay/Highway tabs instead.");
+                        "Unavailable during a song. Use the Gameplay or "
+                        "Highway tabs instead.");
                 }
             }
 
             void DrawHighwayPreviewControls() {
-                FUCK::SeparatorText("On screen");
-                FUCK::Checkbox("Preview the highway##themeHighwayPreview",
+                FUCK::SeparatorText("Preview");
+                FUCK::Checkbox("Show highway preview##themeHighwayPreview",
                                &_highwayPreview);
                 if (_highwayPreview) {
                     theme_preview::Keep(theme_preview::Target::kHighway);
@@ -512,13 +473,11 @@ namespace SH {
                 if (EngineFeed::GetSingleton().active.load(
                         std::memory_order_acquire)) {
                     FUCK::TextDisabled(
-                        "Your own song is on screen; edits land on it "
-                        "directly.");
+                        "Editing the active song.");
                 } else {
                     FUCK::TextDisabled(
-                        "The real highway on a short demo phrase, at its "
-                        "true size. Pause a song and reopen this page to "
-                        "tune against your own chart instead.");
+                        "The real highway on a short demo phrase. Pause a "
+                        "song to edit its chart instead.");
                 }
             }
 
@@ -528,23 +487,18 @@ namespace SH {
             bool _saveFailed = false;
             double _saveAt = 0.0;
 
-            // Preview targets, per tab. Both default to showing something:
-            // the point of the page is to watch the menu change, and a
-            // preview you have to switch on first is one most people will
-            // never find.
-            int  _menuPreview    = 1;  // index into kItems: Songbook
+            // Menu preview starts on Songbook; highway preview is enabled.
+            int  _menuPreview    = 1;
             bool _highwayPreview = true;
 
-            // Kept for the Highway tab's size/aspect readout only - the
-            // image itself is now shown by the real background layer.
+            // Used for the Highway tab's size and aspect readout.
             void* _previewImage = nullptr;
             bool _previewAttempted = false;
             std::string _previewPath;
             float _previewW = 0.0f;
             float _previewH = 0.0f;
 
-            // The three decorative full-screen highway layers (see
-            // RenderUi.cpp / HighwayFullscreenLayerD3D).
+            // Decorative full-screen highway layers.
             LayerFieldState _underlay;
             LayerFieldState _midlayer;
             LayerFieldState _overlay;

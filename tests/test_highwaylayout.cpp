@@ -117,9 +117,7 @@ static void RunBackgroundUvTests() {
         CHECK_NEAR(right.y, left.y, 1e-6);
     }
 
-    // The native shader computes UV from pixel position, so crossing the old
-    // ImGui quad's TL->BR triangle diagonal is continuous instead of jumping
-    // to a different affine interpolation.
+    // Pixel-based UVs remain continuous across the quad diagonal.
     const V2 diagMid{
         (cx - HalfWOf(s, v, 1.0f) + cx + HalfWOf(s, v, 0.0f)) * 0.5f,
         (YOf(s, v, 1.0f) + YOf(s, v, 0.0f)) * 0.5f
@@ -218,8 +216,7 @@ static void RunTrailSegTests() {
 static void RunEmitTests() {
     const Style s = Style::Default();
     const View  v{ 1920, 1080 };
-    {   // The highway floor never decomposes into strips: one gradient
-        // shape and exactly one continuous shape for each edge.
+    {   // The highway floor uses one continuous shape per edge.
         RecordingRenderer r;
         EmitSurface(s, v, false, 0, r);
         CHECK(r.ops.size() == 3);
@@ -233,7 +230,7 @@ static void RunEmitTests() {
             CHECK_NEAR(op.p[3].y, YOf(s, v, 0.0f), 1e-3);
         }
     }
-    {   // theme-driven surface colors: one gradient + two border rails
+    {   // Theme-driven surface colors.
         const RGBA oldGradient = kHighwayGradient;
         const RGBA oldRail = kHighwayBorderLine;
         kHighwayGradient = RGBA{ 0.12f, 0.18f, 0.24f, 0.66f };
@@ -251,7 +248,7 @@ static void RunEmitTests() {
         kHighwayGradient = oldGradient;
         kHighwayBorderLine = oldRail;
     }
-    {   // beat lines are derived from the measure-line theme color
+    {   // Beat lines derive from the measure-line theme color.
         const RGBA oldMeasure = kHighwayMeasureLine;
         kHighwayMeasureLine = RGBA{ 0.80f, 0.60f, 0.40f, 0.50f };
 

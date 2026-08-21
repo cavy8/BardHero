@@ -3,7 +3,7 @@
 
 // IHighwayRenderer -> FUCK ABI. Thin, untested glue (the pure side is
 // HighwayLayout). No FUCK types in this header (include-order pitfall);
-// image handles are opaque void* values.
+// Image handles are opaque pointers.
 
 #include "render/IHighwayRenderer.h"
 

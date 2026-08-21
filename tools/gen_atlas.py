@@ -187,17 +187,6 @@ def cell_needle():
     a = np.clip(head + 0.85 * tail, 0, 1)
     return np.ones_like(r), a
 
-def cell_highway_fade():
-    # Cell 56: highway floor depth-fade, a real per-pixel alpha ramp
-    # (replaces DrawSurface's 64 flat-alpha strips - visible banding at
-    # 16 steps, still visible at 64; field 2026-08-19). White so it tints
-    # like every other sprite. cy=-1 (top of cell, v=0) is the horizon
-    # edge, cy=+1 (bottom, v=1) is the strikeline edge - endpoints match
-    # the old strip formula's 0.10/0.65 exactly so the look doesn't shift.
-    t = (cy + 1.0) / 2.0
-    a = 0.10 + 0.55 * t
-    return np.ones_like(r), np.clip(a, 0, 1)
-
 # --- cells 30/31/38: GH-feel spec P3 lightning-bolt segments --------------
 # Jagged bright segment along +x with a soft glow skirt; drawn in game as
 # oriented quads chained into a polyline (BoltOffsets jitters the nodes).
@@ -304,12 +293,11 @@ for col, row, cols_wide, text, font_px in STRIPS:
     write_tile(lum, a, col * CELL, row * CELL, cols_wide * CELL, CELL)
 
 # P2 flame cells sit at fixed indices (50-55, row 6): APPEND ONLY - moving
-# any earlier cell repoints every later sprite (known pitfall). Cell 56 is a
-# low-resolution fallback reference; runtime uses highway_fade.png instead.
+# any earlier cell repoints every later sprite (known pitfall). Cell 56 stays
+# empty because the highway fade uses highway_fade.png outside the atlas.
 P2_CELLS = [(50 + i, cell_flame_fb(i)) for i in range(4)] + \
     [(54, cell_ember), (55, cell_needle), (39, cell_trail_cap)] + \
-    [(30, cell_bolt(0)), (31, cell_bolt(1)), (38, cell_bolt(2))] + \
-    [(56, cell_highway_fade)]
+    [(30, cell_bolt(0)), (31, cell_bolt(1)), (38, cell_bolt(2))]
 for i, fn in P2_CELLS:
     lum, a = fn()
     write_tile(lum, a, (i % GRID) * CELL, (i // GRID) * CELL, CELL, CELL)
